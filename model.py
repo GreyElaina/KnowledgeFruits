@@ -14,9 +14,10 @@ import utils
 import password
 from database import db
 from base import config
+import Exceptions
 
 class user(peewee.Model):
-    uuid = peewee.CharField(default=(lambda: str(uuid.uuid4()).replace("-", ""))(), index=True)
+    uuid = peewee.CharField(default=(lambda: str(uuid.uuid4()).replace("-", "")), index=True)
     username = peewee.CharField(null=True)
     head = peewee.CharField(null=True)
     email = peewee.CharField()
@@ -31,7 +32,7 @@ class user(peewee.Model):
         database = db['global']
 
 class profile(peewee.Model):
-    profile_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
+    profile_id = peewee.CharField(max_length=32, default=(lambda: str(uuid.uuid4()).replace("-", "")))
     uuid = peewee.CharField(max_length=32)
     name = peewee.CharField()
     skin = peewee.CharField(null=True)
@@ -44,7 +45,7 @@ class profile(peewee.Model):
 
 class textures(peewee.Model):
     userid = peewee.CharField(32) # 标识上传者, UUID
-    textureid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
+    textureid = peewee.CharField(default=(lambda: str(uuid.uuid4()).replace("-", "")))
     photoname = peewee.CharField()
     height = peewee.IntegerField(default=32)
     width = peewee.IntegerField(default=64)
@@ -66,7 +67,7 @@ class banner(peewee.Model):
         database = db['global']
 
 class group(peewee.Model):
-    id = peewee.CharField(default=utils.shortid())
+    id = peewee.CharField(default=utils.shortid)
     name = peewee.CharField()
     creater = peewee.CharField()
     manager = peewee.CharField()
@@ -119,7 +120,7 @@ class member(peewee.Model):
         database = db['global']
 
 class review(peewee.Model):
-    id = peewee.CharField(default=utils.shortid())
+    id = peewee.CharField(default=utils.shortid)
     user = peewee.CharField()
     group = peewee.CharField()
     time = peewee.TimestampField(utc=True)
@@ -131,7 +132,7 @@ class review(peewee.Model):
         database = db['global']
 
 class message(peewee.Model):
-    messageid = peewee.CharField(default=utils.shortid())
+    messageid = peewee.CharField(default=utils.shortid)
     from_ = peewee.CharField(default="KnowledgeFruits Daemon", column_name='from')
     to = peewee.CharField()
     is_read = peewee.BooleanField(default=False)

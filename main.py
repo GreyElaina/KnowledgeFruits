@@ -10,7 +10,7 @@ import customskinapi
 import knowledgeapi
 import yggdrasil
 import texture
-import YggdrasilGroup
+import yggdrasil_group
 import emailverify
 from time import sleep
 from flask import render_template

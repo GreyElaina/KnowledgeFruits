@@ -5,7 +5,8 @@ const VueLoaderPlugin = require('vue-loader/lib/plugin')
 module.exports = {
     entry: {
         login: './src/pages/login/index.js',
-        register: "./src/pages/register/index.js"
+        register: "./src/pages/register/index.js",
+        info: "./src/pages/info/index.js"
     },
     plugins: [
         new webpack.LoaderOptionsPlugin({
@@ -42,6 +43,16 @@ module.exports = {
                     'vue-loader'
                 ]
             },
+            {
+                test:/\.js$/,
+                exclude:/(node_modules|bower_components)/,
+                use:{
+                    loader:'babel-loader',
+                    options:{
+                        presets:['env']
+                    }
+                }
+            }
         ]
     }
 };

@@ -18,4 +18,9 @@ class IllegalArgumentException(Exception):
     message = "Access token already has a profile assigned."
     code = 400
     
-ErrorList = [InvalidCredentials, InvalidRequestData, InvalidToken, IllegalArgumentException]
+class DuplicateData(Exception):
+    error = "ForbiddenOperationException"
+    message = "Duplicate data."
+    code = 403
+
+ErrorList = [InvalidCredentials, InvalidRequestData, InvalidToken, IllegalArgumentException, DuplicateData]

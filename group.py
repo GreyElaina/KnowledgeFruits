@@ -19,7 +19,7 @@ def has_permission_in_group(user_id, group_id):
 
 def token_is_group(token, group_id):
     if not isingroup(token.get("user"), group_id):
-        return False
+        raise Exceptions.InvalidToken()
     return token.get("group") == group_id
 
 def auto_verify(request):

@@ -7,12 +7,20 @@ import base64
 import re
 import utils
 import Exceptions
+import json
+import model
+import uuid
+import password
+from datetime import datetime
 
 cache_verify = cacheout.Cache(ttl=0, maxsize=32768)
+cache_limit = cacheout.Cache(ttl=0, maxsize=32768)
 mailer = zmail.server(config.email.username, config.email.password)
+
 
 class ConfigError(Exception):
     pass
+
 
 if not (mailer.smtp_able() or mailer.pop_able()):
     raise ConfigError("your config of email is wrong.")
@@ -27,16 +35,17 @@ template_mail = {
 }
 
 def decrypt(crypt_text):  # 用私钥解密
-    privkey = rsa.PrivateKey.load_pkcs1(open('./data/rsa.pem').read().encode("utf-8"))
-    lase_text = rsa.decrypt(base64.b64decode(crypt_text), privkey).decode("utf-8")  # 注意，这里如果结果是bytes类型，就需要进行decode()转化为str
-    return lase_text
+    try:
+        privkey = rsa.PrivateKey.load_pkcs1(
+            open('./data/rsa.pem').read().encode("utf-8"))
+        lase_text = rsa.decrypt(base64.b64decode(crypt_text), privkey).decode(
+            "utf-8") 
+        return lase_text
+    except rsa.pkcs1.DecryptionError:
+        raise Exceptions.InvalidRequestData()  # 加密失误
 
-# 前端通知后端的方式:
-# 当访问register页面时, 前端告知后端生成一registerId, 并存储于本地, 过期时间约为360s
-# 按下注册按钮时, 将消息和registerId拼接, 后端存储消息, 并发送邮件.(前端这个时候还没设密码)
-# 访问REGISTER_URL(前端会拼接一跳转URL), 然后跳转, 设置密码(前端使用yggdrasil那个密匙加密(base64下先)并发送到后端.)
-@app.route("/api/email/verify", methods=['POST'])
-def verify():
+@app.route("/api/knowledgefruits/register/", methods=['POST'])
+def quest():
     data = request.json
     '''
     if decrypt(data.get("password")) == data.get("verify"):
@@ -45,4 +54,57 @@ def verify():
         return Response(status=403)
     '''
     if not re.match(utils.StitchExpression(config.reMatch.UserEmail), data.get("email")):
-        raise Exceptions.InvalidToken
+        raise Exceptions.IllegalArgumentException()  # 邮箱不匹配
+    if not re.match(utils.StitchExpression(config.reMatch.UserPassword), decrypt(data.get("password"))):
+        raise Exceptions.InvalidToken()  # 密码不合格
+    if not re.match(utils.StitchExpression(config.reMatch.PlayerName), data.get("username")):
+        raise Exceptions.InvalidCredentials()  # 名称不合格
+    if model.getuser(data.get("email")):
+        raise Exceptions.DuplicateData()  # 已注册的用户
+
+    if not cache_limit.get(data.get("email")):
+        cache_limit.set(data.get("email"), "LIMITER", ttl=180)
+    else:
+        cache_limit.set(data.get("email"), "LIMITER", ttl=180)
+        return Response(json.dumps({
+            "error": "ForbiddenOperationException",
+            "errorMessage": "Frequency limit, wait a moment."
+        }), status=403, mimetype='application/json; charset=utf-8')
+
+    password = decrypt(data.get("password"))
+    salt = utils.CreateSalt(length=16)
+    registerId = str(uuid.uuid4()).replace("-", "")
+
+    cache_verify.set(registerId, {
+        "email": data.get("email"),
+        "password": {
+            "context": password,
+            "salt": salt
+        },
+        "username": data.get("username")
+    }, ttl=60*30)
+    mail = template_mail.copy()
+    mail["content_text"] = mail["content_text"].format(REGISTER_URL=("".join(
+        [config.HostUrl, "/api/knowledgefruits/register/verify?registerId=", registerId])))
+    mailer.send_mail(data.get("email"), mail)
+
+    return Response(status=204)
+
+
+@app.route('/api/knowledgefruits/register/verify')
+def verify():
+    data = cache_verify.get(request.args.get("registerId"))
+    if not data:
+        raise Exceptions.InvalidToken()
+    if model.getuser(data.get("email")):
+        raise Exceptions.InvalidToken()
+    result = model.user(username=data.get("username"), email=data.get("email"), 
+        password=password.crypt(data["password"]['context'], data["password"]['salt']),
+        passwordsalt=data["password"]['salt'],
+        register_time=datetime.now(),
+        last_login=0,
+        last_joinserver=0
+    )
+    result.save()
+    cache_verify.delete(request.args.get("registerId"))
+    return Response(status=204)

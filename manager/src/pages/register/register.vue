@@ -61,10 +61,56 @@ export default {
       axios
         .get(`${config.source}/api/knowledgefruits`)
         .then(function(response) {
-          axios.post(`${config.source}/api/email/verify`, {
-              password: that.encrypt(response.data.Yggdrasil.info.signaturePublickey, that.password),
-              verify: that.password
-          });
+          axios
+            .post(`${config.source}/api/knowledgefruits/register/`, {
+              email: that.email,
+              password: that.encrypt(
+                response.data.Yggdrasil.info.signaturePublickey,
+                that.password
+              ),
+              username: that.username
+            })
+            .then(function(response) {
+              that.$notify({
+                title: "提交请求成功",
+                message: "请于你所填写的邮箱内收取我们发送的验证邮件",
+                type: "success"
+              });
+            })
+            .catch(function(e) {
+              switch (e.response.data.errorMessage) {
+                case "Access token already has a profile assigned.":
+                  that.$notify.error({
+                    title: "提交请求失败",
+                    message: "邮箱地址未符合后端规范."
+                  });
+                  break;
+                case "Invalid token.":
+                  that.$notify.error({
+                    title: "提交请求失败",
+                    message: "所填写的密码未符合后端规范."
+                  });
+                  break;
+                case "Invalid credentials. Invalid username or password.":
+                  that.$notify.error({
+                    title: "提交请求失败",
+                    message: "所填写的昵称未符合后端规范."
+                  });
+                  break;
+                case "Duplicate data.":
+                  that.$notify.error({
+                    title: "提交请求失败",
+                    message: "你已经注册过了."
+                  });
+                  break;
+                case "Frequency limit, wait a moment.":
+                  that.$notify.error({
+                    title: "提交请求失败",
+                    message: "请不要重复发送请求,3分钟后再试,该次请求后生效."
+                  });
+                  break;
+              }
+            });
         });
     }
   }
