@@ -112,4 +112,5 @@ Include
 Lib
 Scripts
 share
-pip-selfcheck.jsoo
+pip-selfcheck.json
+pyvenv.cfg
