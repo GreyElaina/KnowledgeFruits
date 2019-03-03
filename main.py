@@ -15,6 +15,7 @@ import uuid
 from werkzeug.exceptions import HTTPException, NotFound
 import simplejson
 from flask_apscheduler import APScheduler
+from os.path import exists as FileExists
 
 app = Flask(__name__)
 
@@ -80,7 +81,7 @@ def DeleteDisabledToken(): # 删除失效Token(token.status == 2)
 
 def ChangeItemStatus():
     for i in model.ms_serverjoin.select().where(model.ms_serverjoin.Out_timed == False):
-        if int(time.time()) - int(i.time) >= config.Outtime:
+        if int(time.time()) - round(float(i.time)) >= config.Outtime:
             i.Out_timed = True
             i.save()
 
@@ -311,8 +312,7 @@ def joinserver():
             # Token有效
             # email = token.bind
             result = model.db_profile.get(createby=token.bind)
-            playeruuid = base.OfflinePlayerUUID(result.name).replace("-", "")
-            print(data['selectedProfile'])
+            playeruuid = model.db_profile.get(name=result.name).format_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
                 sj = model.ms_serverjoin(
                     AccessToken=AccessToken,
@@ -346,7 +346,7 @@ def PlayerHasJoined():
     
     Successful = PlayerName == ProfileInfo.name and RemoteIP == JoinInfo.RemoteIP if RemoteIP else True
     if Successful:
-        return model.format_profile(ProfileInfo)
+        return simplejson.dumps(model.format_profile(ProfileInfo))
     else:
         return Response(status=204)
 
@@ -423,4 +423,15 @@ if __name__ == '__main__':
     #model.db['cache'].create_tables([model.ms_serverjoin])
     # Drop Cache Table
     #model.ms_serverjoin.delete().execute()
+    if FileExists('./data/global.db'):
+        model.db['global'].create_tables([model.db_profile, model.db_token, model.db_user])
+        model.db['global'].create_tables([model.ms_serverjoin])
+    if False in [FileExists(config.RSAPEM), FileExists(config.PUBLICKEY)]:
+        import rsa
+        (public, private) = rsa.newkeys(2048)
+        with open(config.RSAPEM, 'w') as f:
+            f.write(private.save_pkcs1())
+        with open(config.PUBLICKEY, 'w') as f:
+            f.write(public.save_pkcs1())
+
     app.run(**config.runattr)
