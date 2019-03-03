@@ -11,6 +11,7 @@ from OpenSSL.crypto import load_privatekey, FILETYPE_PEM, sign
 import uuid
 import rsa
 import binascii
+import password
 '''
 dbinfo = config.dbtype[config.database['type']]'''
 db = {}
@@ -76,8 +77,8 @@ def format_texture(profile):
     OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
     db_data = db_profile.get(uuid=OfflineUUID)
     db_datas = db_profile.select().where(db_profile.uuid==OfflineUUID)
-    print(type(db_data.time))
-    return {
+    #print(type(db_data.time))
+    IReturn = {
         "timestamp" : round(float(db_data.time)),
         'profileId' : db_data.uuid.replace("-", ""),
         'profileName' : db_data.name,
@@ -90,6 +91,7 @@ def format_texture(profile):
             } for i in db_datas
         }
     }
+    return IReturn
 
 def format_profile(profile, unsigned=False):
     def sha1withrsa(text):
@@ -119,12 +121,22 @@ def format_user(user):
         "properties" : []
     }
 
-def NewProfile(Playername, User, Png):
+def NewProfile(Playername, User, Png, Type='SKIN', Model="STEVE"):
     Email = User.email
-    db_p = db_profile(uuid=base.OfflinePlayerUUID(Playername).replace('-',''), name=Playername, hash=base.PngBinHash(config.texturepath + Png), createby=Email)
+    db_p = db_profile(uuid=base.OfflinePlayerUUID(Playername).replace('-',''), name=Playername, hash=base.PngBinHash(config.texturepath + Png), createby=Email, type=Type, model=Model)
     print(config.texturepath + Png)
-    os.rename(config.texturepath + Png, config.texturepath + base.PngBinHash(config.texturepath + Png))
+    os.rename(config.texturepath + Png, config.texturepath + base.PngBinHash(config.texturepath + Png) + ".png")
     db_p.save()
 
+def NewUser(email, passwd):
+    salt = base.CreateSalt(length=8)
+    db_user(
+        email=email,
+        password=password.crypt(passwd, salt),
+        passwordsalt=salt
+    ).save()
+
 if __name__ == '__main__':
-    NewProfile("Chenwe_i_lin1", db_user.get(email='1846913566@qq.com'), "skin.png")
+    NewUser("test@gmail.com", "asd123456")
+    NewUser("test1@gmail.com", "asd123456")
+    NewProfile("testplayer1", db_user.get(email='test1@gmail.com'), "1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png")

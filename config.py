@@ -39,7 +39,7 @@ dbtype = {
 # 访问速率限制相关(flask-limiter)
 limiter_filter = {
     'whitelist' : [],
-    'default_limits' : ["30/minute,1/second"]
+    'default_limits' : ["100/second"]
 }
 
 # loginToken过期的限界划分(三个阶段),单位:天
@@ -61,14 +61,15 @@ salt = r'sX*h}b<.$&$vt8mzgS%9IE6nXe3EU|=`'
 # app.run()函数运行参数
 runattr = {
     "debug" : True,
-    'host' : '0.0.0.0',
+    'host' : '192.168.31.189',
+    'port' : '5001'
 }
 
 # texture目录
 texturepath = const['cwd'] + "/data/texture/"
 
 # 实际访问地址
-url = 'http://192.168.31.189:5000/'
+url = 'http://192.168.31.189:5001/'
 
 # Token清道夫程序 执行间隔,单位 分
 ChangeTokenStatus = 1

@@ -93,8 +93,8 @@ crontab = APScheduler()
 crontab.init_app(app)
 crontab.start()
 
-limiter = Limiter(app=app, key_func=get_remote_address, default_limits=config.limiter_filter['default_limits'])
-
+#limiter = Limiter(app=app, key_func=get_remote_address, default_limits=config.limiter_filter['default_limits'])
+'''
 @limiter.request_filter
 def filter_func():
     path_url = request.path
@@ -103,7 +103,7 @@ def filter_func():
         return True
     else:
         return False
-
+'''
 @app.route(config.const['base'] + '/', methods=['GET'])
 def index():
     return Response(simplejson.dumps({
@@ -119,8 +119,9 @@ def authenticate():
     IReturn = {}
     if request.is_json:
         data = request.json
-        db_r = model.db_profile.get(createby=data['username'])
-        user = model.db_user.get(email=db_r.createby)
+        user = model.db_user.get(email=data['username'])
+        SelectedProfile = []
+        AvailableProfiles = []
         if password.crypt(data['password'], user.passwordsalt) == user.password:
             # 登录成功.
             ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
@@ -128,14 +129,23 @@ def authenticate():
             
             Token = model.db_token(accessToken=AccessToken, clientToken=ClientToken, bind=data['username'])
             Token.save() # 颁发Token
+            try:
+                AvailableProfiles = [model.format_profile(i) for i in model.db_profile.select().where(model.db_profile.createby==data['username'])]
+            except Exception as e:
+                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    AvailableProfiles = []
 
-            AvailableProfiles = [model.format_profile(i) for i in model.db_profile.select().where(model.db_profile.createby==data['username'])]
+            try:
+                SelectedProfile = model.format_profile(model.db_profile.get(createby=user.email))
+            except Exception as e:
+                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    SelectedProfile = []
 
             IReturn = {
                 "accessToken" : AccessToken,
                 "clientToken" : ClientToken,
                 "availableProfiles" : AvailableProfiles,
-                "selectedProfile" : model.format_profile(db_r)
+                "selectedProfile" : SelectedProfile
             }
             
             if "requestUser" in data:
@@ -145,7 +155,7 @@ def authenticate():
         info = make_response(simplejson.dumps(IReturn))
         info.headers['Content-Type'] = 'application/json; charset=utf-8'
         return info
-
+'''
 @app.route(config.const['base'] + '/authserver/register', methods=['POST'])
 def register():
     if request.is_json:
@@ -165,7 +175,7 @@ def register():
         user = model.db_user(
             email=re.match(r'^[0-9a-zA-Z\_\-]+(\.[0-9a-zA-Z\_\-]+)*@[0-9a-zA-Z]+(\.[0-9a-zA-Z]+){1,}$', data['email']).group(),
             password=password.crypt(data['password'], salt),
-            passwordsalt=salt, playername=data['playername']
+            passwordsalt=salt
         )
         profile = model.db_profile(
             uuid=base.OfflinePlayerUUID(data['playername']).replace('-',''),
@@ -175,7 +185,7 @@ def register():
         profile.save()
         user.save()
         return "OK"
-
+'''
 @app.route(config.const['base'] + '/authserver/refresh', methods=['POST'])
 def refresh():
     IReturn = {}
