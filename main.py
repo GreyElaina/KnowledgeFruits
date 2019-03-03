@@ -93,8 +93,8 @@ crontab = APScheduler()
 crontab.init_app(app)
 crontab.start()
 
-#limiter = Limiter(app=app, key_func=get_remote_address, default_limits=config.limiter_filter['default_limits'])
-'''
+limiter = Limiter(app=app, key_func=get_remote_address, default_limits=config.limiter_filter['default_limits'])
+
 @limiter.request_filter
 def filter_func():
     path_url = request.path
@@ -103,7 +103,7 @@ def filter_func():
         return True
     else:
         return False
-'''
+
 @app.route(config.const['base'] + '/', methods=['GET'])
 def index():
     return Response(simplejson.dumps({

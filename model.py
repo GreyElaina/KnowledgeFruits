@@ -84,7 +84,7 @@ def format_texture(profile):
         'profileName' : db_data.name,
         'textures' : {
             i.type : {
-                "url" : config.url + "texture/" + i.hash,
+                "url" : config.url + "/texture/" + i.hash,
                 "metadata" : {
                     'model' : {"STEVE": 'default', "ALEX": 'slim'}[i.model]
                 } if i.type == 'SKIN' else {}

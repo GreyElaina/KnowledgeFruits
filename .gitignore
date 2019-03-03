@@ -107,3 +107,9 @@ data/texture/*.png
 data/public.pem
 data/rsa.pem
 data/*.db
+
+Include
+Lib
+Scripts
+share
+pip-selfcheck.jsoo
