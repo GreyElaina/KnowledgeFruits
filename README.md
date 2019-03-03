@@ -5,7 +5,7 @@
 确认Python版本 `>= 3.6.0`, 并使用pip安装扩展:
 
 ```
-python3 -m pip install -r requirements.text
+python3 -m pip install -r requirements.txt
 ```
 或:
 ```
