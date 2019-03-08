@@ -34,6 +34,16 @@ dbtype = {
                 i : lambda: database['connect_info'][i] for i in database['connect_info'].keys()
             }
         }
+    },
+    "mysql": {
+        "class" : peewee.MySQLDatabase,
+        "attrs" : ['database'],
+        "templates": lambda: database['globalinfo'],
+        "attr" : {
+            "database" : {
+                i : lambda: database['connect_info'][i] for i in database['connect_info'].keys()
+            }
+        }
     }
 }
 
