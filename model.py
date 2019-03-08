@@ -23,10 +23,12 @@ db['global'] = peewee.SqliteDatabase("./data/global.db")
 db['cache'] = peewee.SqliteDatabase("./data/cache.db")
 
 class db_user(peewee.Model):
+    uuid = peewee.CharField(default=str(uuid.uuid4()))
     email = peewee.CharField()
     password = peewee.CharField()
     passwordsalt = peewee.CharField()
     #playername = peewee.CharField()
+    selected = peewee.CharField(null=True)
 
     class Meta:
         database = db['global']
@@ -35,7 +37,8 @@ class db_token(peewee.Model):
     accessToken = peewee.CharField()
     clientToken = peewee.CharField()
     status = peewee.CharField(default=0)
-    bind = peewee.CharField()
+    bind = peewee.CharField(null=True)
+    email = peewee.CharField()
     setuptime = peewee.TimestampField(default=time.time())
 
     class Meta:
@@ -50,6 +53,8 @@ class db_profile(peewee.Model):
     hash = peewee.CharField()
     time = peewee.CharField(default=str(int(time.time())))
     createby = peewee.CharField() # 谁创建的角色?  邮箱
+    ismain = peewee.BooleanField(default=True)
+    #beselected = peewee.BooleanField(default=False)
 
     class Meta:
         database = db['global']
@@ -93,32 +98,32 @@ def format_texture(profile):
     }
     return IReturn
 
-def format_profile(profile, unsigned=False):
+def format_profile(profile, unsigned=False, Properties=False):
     def sha1withrsa(text):
         key = open("./data/rsa.pem").read()
         signature = rsa.sign(text, rsa.PrivateKey.load_pkcs1(key), 'SHA-1')
         return binascii.hexlify(signature)
-    OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
-    usermodel = db_profile.get(uuid=OfflineUUID)
     textures = simplejson.dumps(format_texture(profile))
     IReturn = {
-        "id" : usermodel.format_id,
+        "id" : profile.format_id,
         "name" : profile.name,
-        "properties" : [
+    }
+    if Properties:
+        IReturn['properties'] = [
             {
-                "name":'textures',
+                "name": 'textures',
                 'value' : base64.b64encode(textures.encode("utf-8")),
             }
         ]
-    }
-    if unsigned == False:
-        IReturn['properties'][0]['signature'] = sha1withrsa(base64.b64encode(textures.encode("utf-8")))
+        if unsigned == False:
+            IReturn['properties'][0]['signature'] = sha1withrsa(base64.b64encode(textures.encode("utf-8")))
+
     return IReturn
 
 def format_user(user):
     return {
-        'id' : base.OfflinePlayerUUID(user.email).replace('-',''),
-        "properties" : []
+        'id' : user.uuid,
+        'properties' : []
     }
 
 def NewProfile(Playername, User, Png, Type='SKIN', Model="STEVE"):
@@ -137,6 +142,8 @@ def NewUser(email, passwd):
     ).save()
 
 if __name__ == '__main__':
-    NewUser("test@gmail.com", "asd123456")
-    NewUser("test1@gmail.com", "asd123456")
-    NewProfile("testplayer1", db_user.get(email='test1@gmail.com'), "1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png")
+    #NewUser("test@gmail.com", "asd123456")
+    #NewUser("test3@to2mbn.org", "asd123456")
+    #NewProfile("testplayer", db_user.get(email='test3@to2mbn.org'), "490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png", Model='ALEX')
+    #NewProfile("testplayer1", db_user.get(email='test3@to2mbn.org'), "1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png", Type='CAPE')
+    db['global'].create_tables([db_profile])

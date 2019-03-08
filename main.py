@@ -93,8 +93,9 @@ crontab = APScheduler()
 crontab.init_app(app)
 crontab.start()
 
-limiter = Limiter(app=app, key_func=get_remote_address, default_limits=config.limiter_filter['default_limits'])
-
+limiter = Limiter(app=app, key_func=lambda: request.host_url)
+''', default_limits=config.limiter_filter['default_limits'])
+'''
 @limiter.request_filter
 def filter_func():
     path_url = request.path
@@ -114,32 +115,44 @@ def index():
 
 # /authserver
 
+#@limiter.exempt 
+#@limiter.limit(limit_value="30/minute;5/second", key_func=get_remote_address)
 @app.route(config.const['base'] + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
     if request.is_json:
         data = request.json
-        user = model.db_user.get(email=data['username'])
-        SelectedProfile = []
+        try:
+            user = model.db_user.get(model.db_user.email==data['username'])
+        except Exception as e:
+            if "db_userDoesNotExist" == e.__class__.__name__:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        SelectedProfile = {}
         AvailableProfiles = []
         if password.crypt(data['password'], user.passwordsalt) == user.password:
             # 登录成功.
             ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
             AccessToken = str(uuid.uuid4()).replace("-","")
             
-            Token = model.db_token(accessToken=AccessToken, clientToken=ClientToken, bind=data['username'])
+            Token = model.db_token(accessToken=AccessToken, clientToken=ClientToken, bind=user.selected, email=user.email)
             Token.save() # 颁发Token
             try:
-                AvailableProfiles = [model.format_profile(i) for i in model.db_profile.select().where(model.db_profile.createby==data['username'])]
+                AvailableProfiles = [
+                    model.format_profile(i, unsigned=True) for i in model.db_profile.select().where((model.db_profile.createby==user.email) & (model.db_profile.ismain==True)).group_by(model.db_profile.uuid)
+                ]
             except Exception as e:
                 if "db_tokenDoesNotExist" == e.__class__.__name__:
                     AvailableProfiles = []
 
             try:
-                SelectedProfile = model.format_profile(model.db_profile.get(createby=user.email))
+                SelectedProfile = model.format_profile(model.db_profile.get(uuid=user.selected), unsigned=True)
             except Exception as e:
                 if "db_tokenDoesNotExist" == e.__class__.__name__:
-                    SelectedProfile = []
+                    SelectedProfile = {}
 
             IReturn = {
                 "accessToken" : AccessToken,
@@ -147,84 +160,101 @@ def authenticate():
                 "availableProfiles" : AvailableProfiles,
                 "selectedProfile" : SelectedProfile
             }
-            
             if "requestUser" in data:
                 if data['requestUser']:
                     IReturn['user'] = model.format_user(user)
 
-        info = make_response(simplejson.dumps(IReturn))
-        info.headers['Content-Type'] = 'application/json; charset=utf-8'
-        return info
-'''
-@app.route(config.const['base'] + '/authserver/register', methods=['POST'])
-def register():
-    if request.is_json:
-        data = request.json
-        salt = base.CreateSalt(length=12)
-        try:
-            content = [
-                model.db_user.get(email=data['email']),
-                model.db_user.get(playername=data['playername']),
-                None == re.match(r'^[0-9a-zA-Z\_\-]+(\.[0-9a-zA-Z\_\-]+)*@[0-9a-zA-Z]+(\.[0-9a-zA-Z]+){1,}$', data['email'])
-            ]
-        except:
-            content = []
+            if IReturn['selectedProfile'] == {}:
+                del IReturn['selectedProfile']
+        else:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
-        if True in content:
-            return "FAIL"
-        user = model.db_user(
-            email=re.match(r'^[0-9a-zA-Z\_\-]+(\.[0-9a-zA-Z\_\-]+)*@[0-9a-zA-Z]+(\.[0-9a-zA-Z]+){1,}$', data['email']).group(),
-            password=password.crypt(data['password'], salt),
-            passwordsalt=salt
-        )
-        profile = model.db_profile(
-            uuid=base.OfflinePlayerUUID(data['playername']).replace('-',''),
-            name=data['playername'],
-            hash=base.PngBinHash('./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png')
-        )
-        profile.save()
-        user.save()
-        return "OK"
-'''
 @app.route(config.const['base'] + '/authserver/refresh', methods=['POST'])
 def refresh():
-    IReturn = {}
     if request.is_json:
         data = request.json
-        AccessToken = str(uuid.uuid4()).replace("-","")
-        ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
-
+        print(r"data:", data)
+        AccessToken = data['accessToken']
+        ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
         try:
             if 'clientToken' in data:
-                old = model.db_token.get(model.db_token.clientToken == ClientToken, model.db_token.accessToken == data['accessToken'])
+                OldToken = model.db_token.get(accessToken=AccessToken, clientToken=ClientToken)
             else:
-                old = model.db_token.get(model.db_token.accessToken == data['accessToken'])
+                OldToken = model.db_token.get(accessToken=AccessToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
-                return Response("Not Found", status=404)
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
+        User = model.db_user.get(email=OldToken.email)
+        
+        TokenSelected = OldToken.bind
+        if TokenSelected:
+            TokenProfile = model.db_profile.get(uuid=TokenSelected)
         else:
-            selectedProfile = model.format_profile(model.db_profile.get(createby=old.bind))
-            if "selectedProfile" in data:
-                selectedProfile = model.format_profile(model.db_profile.get(name=data['selectedProfile']['name']))
-            old.delete_instance()
+            TokenProfile = {}
+        if 'selectedProfile' in data:
+            PostProfile = data['selectedProfile']
+            # 验证客户端提供的角色信息
+            try:
+                needuser = model.db_profile.get(format_id=PostProfile['id'], name=PostProfile['name'])
+            except Exception as e:
+                if "db_profileDoesNotExist" == e.__class__.__name__:
+                    error = {
+                        'error' : "IllegalArgumentException",
+                        'errorMessage' : "Invalid token."
+                    }
+                    return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                    # 角色不存在.yggdrasil文档没有明确规定,故不填
+                #raise e
+            else:
+                # 验证完毕,有该角色.
+                # 试图向一个已经绑定了角色的令牌指定其要绑定的角色
+                if TokenSelected:
+                    error = {
+                        'error' : 'IllegalArgumentException',
+                        'errorMessage' : "Access token already has a profile assigned."
+                    }
+                    return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                if OldToken.bind:
+                    error = {
+                        'error' : 'IllegalArgumentException',
+                        'errorMessage' : "Access token already has a profile assigned."
+                    }
+                    return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                if needuser.createby != OldToken.email:
+                    error = {
+                        'error' : "ForbiddenOperationException",
+                        'errorMessage' : "Attempting to bind a token to a role that does not belong to its corresponding user."
+                    }
+                    return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
 
-        new = model.db_token(accessToken=AccessToken, clientToken=ClientToken, bind=model.db_profile.get(name=selectedProfile['name']).createby)
-        #playername = selectedProfile['name']
-        new.save()
-
+        NewToken = model.db_token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=ClientToken, email=OldToken.email, bind=TokenSelected)
+        NewToken.save()
+        OldToken.delete_instance()
         IReturn = {
-            "accessToken" : AccessToken,
-            "clientToken" : ClientToken,
-            "selectedProfile" : selectedProfile
+            "accessToken" : NewToken.accessToken,
+            'clientToken' : ClientToken,
+            #'selectedProfile' : {}
         }
-        if "requestUser" in data:
+        if TokenProfile:
+            IReturn['selectedProfile'] = model.format_profile(TokenProfile)
+        print(AccessToken)
+        print(NewToken.accessToken)
+        print(ClientToken)
+        print(IReturn)
+        if 'requestUser' in data:
             if data['requestUser']:
-                IReturn['user'] = model.format_user(model.db_user.get(email=model.db_profile.get(name=selectedProfile['name']).createby))
-
-    info = make_response(simplejson.dumps(IReturn))
-    info.headers['Content-Type'] = 'application/json; charset=utf-8'
-    return info
+                IReturn['user'] = model.format_user(User)
+        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const['base'] + "/authserver/validate", methods=['POST'])
 def validate():
@@ -239,11 +269,19 @@ def validate():
                 result = model.db_token.get(model.db_token.accessToken == AccessToken, model.db_token.clientToken == ClientToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
-                return Response("Not Found", status=404)
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
             if result.status in [2,1]:
-                return Response("Token Out-time.Please refresh or relogin.", status=403)
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
                 return Response(status=204)
 
@@ -253,6 +291,7 @@ def invalidate():
         data = request.json
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if "clientToken" in data else None
+        #print("tesst:", data)
         try:
             if not ClientToken:
                 result = model.db_token.get(model.db_token.accessToken == AccessToken)
@@ -260,35 +299,55 @@ def invalidate():
                 result = model.db_token.get(model.db_token.accessToken == AccessToken, model.db_token.clientToken == ClientToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
-                pass
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
             result.delete_instance()
         finally:
             return Response(status=204)
             
+#@limiter.limit(limit_value="30/minute;1/second", key_func=lambda: request.host_url)
 @app.route(config.const['base'] + '/authserver/signout', methods=['POST'])
 def signout():
     if request.is_json:
         data = request.json
+        print(data['username'])
         email = data['username']
         passwd = data['password']
         try:
             result = model.db_user.get(model.db_user.email == email)
         except Exception as e:
             if "db_userDoesNotExist" == e.__class__.__name__:
-                return Response("Not Found", status=404)
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
-                    model.db_token.delete().where(model.db_token.bind == result.email).execute()
+                    model.db_token.delete().where(model.db_token.bind == result.selected).execute()
                 except Exception as e:
                     if "db_userDoesNotExist" == e.__class__.__name__:
-                        return Response("Not Correct Found", status=404)
+                        error = {
+                            'error' : "ForbiddenOperationException",
+                            'errorMessage' : "Invalid credentials. Invalid username or password."
+                        }
+                        return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
                     raise e
                 else:
                     return Response(status=204)
+            else:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
 
 # /authserver
 
@@ -320,8 +379,8 @@ def joinserver():
         
         if TokenValidate:
             # Token有效
-            # email = token.bind
-            result = model.db_profile.get(createby=token.bind)
+            # uuid = token.bind
+            result = model.db_profile.get(uuid=token.bind)
             playeruuid = model.db_profile.get(name=result.name).format_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
                 sj = model.ms_serverjoin(
@@ -348,7 +407,7 @@ def PlayerHasJoined():
     try:
         JoinInfo = model.ms_serverjoin.get(ServerID=ServerID)
         TokenInfo = model.db_token.get(accessToken=JoinInfo.AccessToken)
-        ProfileInfo = model.db_profile.get(createby=TokenInfo.bind)
+        ProfileInfo = model.db_profile.get(uuid=TokenInfo.bind)
     except Exception as e:
         if "DoesNotExist" in e.__class__.__name__:
             return Response(status=204)
@@ -371,6 +430,7 @@ def searchprofile(getuuid):
         IReturn = model.format_profile(
             #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
             model.db_profile.get(format_id=getuuid),
+            Properties=True,
             unsigned=unsigned
         )
     except Exception as e:
@@ -382,14 +442,16 @@ def searchprofile(getuuid):
 @app.route(config.const['base'] + '/api/profiles/minecraft', methods=['POST'])
 def searchmanyprofile():
     if request.is_json:
-        data = request.json
+        data = list(set(list(request.json)))
         IReturn = []
-        for i in data[:config.MaxSearch - 1]:
+        print(data)
+        for i in range(config.MaxSearch - 1):
             try:
-                IReturn.append(model.format_profile(i))
+                IReturn.append(model.format_profile(model.db_profile.select().where((model.db_profile.name==data[i]) & (model.db_profile.ismain == True)).get()))
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
                     continue
+        print(IReturn)
         return simplejson.dumps(IReturn)
     return Response(status=404)
 
@@ -397,6 +459,55 @@ def searchmanyprofile():
 
 #####################
 
+# /utils
+util = config.const['util']
+@app.route(util + "/Registry", methods=['POST'])
+def register():
+    if request.is_json:
+        data = request.json
+        email = re.match(r'^[0-9a-zA-Z\_\-]+(\.[0-9a-zA-Z\_\-]+)*@[0-9a-zA-Z]+(\.[0-9a-zA-Z]+){1,}$', data['email'])
+        if not email:
+            return Response(status=400)
+        
+        if len(data['password']) < config.util['minLength']:
+            return Response(status=400)
+        if not re.compile('[^a-zA-Z0-9]').search(data['password']):
+            return Response(status=400)
+
+        UserSalt = base.CreateSalt(length=8)
+        user = model.db_user(
+            email=email.string,
+            password=password.crypt(data['password'], UserSalt),
+            passwordsalt=UserSalt
+        )
+        user.save()
+        
+    else:
+        return Response(status=504)
+'''
+@app.route(util + "/Profile/New", methods=['POST'])
+def util_newprofile():
+    if request.is_json:
+        data = request.json
+        content = [
+            "accessToken" in data,
+            'playername' in data,
+            'pngfilename' in data
+        ]
+        CanContinue = False
+        if False in content:
+            return Response(status=400)
+        try:
+            token = model.db_token.get(accessToken=data["accessToken"])
+        except Exception as e:
+            if "DoesNotExist" in e.__class__.__name__:
+                return Response(status=404)
+        email = token.bind
+        
+        
+    else:
+        return Response(status=504)
+'''
 @app.route(config.const['debug'] + "/test", methods=['GET','POST'])
 def createprofile():
     # 这里拿来测试

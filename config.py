@@ -7,7 +7,8 @@ const = {
     "cwd" : getcwd(),
     "__name__" : __name__,
     'base' : "/api/yggdrasil",
-    'debug' : "/debug"
+    'debug' : "/debug",
+    'util' : '/util'
 }
 
 ServerName = "KnowledgeFruits - Minecrart Yggdrasil"
@@ -81,7 +82,7 @@ RunMinute_Change = 30
 RunMinute_Delete = 60
 
 # /api/profiles/minecraft接口最大查找数
-MaxSearch = 5
+MaxSearch = 8
 
 IndexMeta = {
     'serverName' : ServerName,
@@ -95,3 +96,7 @@ SiteDomain = [
 
 RSAPEM = './data/rsa.pem'
 PUBLICKEY = './data/public.pem'
+
+util = {
+    "minLength" : 8
+}

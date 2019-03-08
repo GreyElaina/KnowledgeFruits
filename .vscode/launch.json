@@ -51,12 +51,10 @@
             "request": "launch",
             "module": "flask",
             "env": {
-                "FLASK_APP": "app.py"
+                "FLASK_APP": "main.py"
             },
             "args": [
                 "run",
-                "--no-debugger",
-                "--no-reload"
             ],
             "jinja": true
         },
