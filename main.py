@@ -1,5 +1,4 @@
-from flask import Flask, url_for, Response
-from flask import request, abort
+from flask import Flask, url_for, Response, request, abort, render_template, session
 import config
 import peewee
 import time
@@ -16,6 +15,7 @@ from werkzeug.exceptions import HTTPException, NotFound
 import simplejson
 from flask_apscheduler import APScheduler
 from os.path import exists as FileExists
+from werkzeug.contrib.fixers import LighttpdCGIRootFix
 
 app = Flask(__name__)
 
@@ -72,8 +72,7 @@ def OutTime(token):
     # 2:已经失效,无法执行任何操作
 
 def CheckTokenStatus():
-    canuse = model.db_token.select().where(model.db_token.status == 0, model.db_token.status == 1)
-    for i in canuse:
+    for i in model.db_token.select().where(model.db_token.status == 0 | model.db_token.status == 1):
         OutTime(i)
 
 def DeleteDisabledToken(): # 删除失效Token(token.status == 2)
@@ -93,17 +92,21 @@ crontab = APScheduler()
 crontab.init_app(app)
 crontab.start()
 
-limiter = Limiter(app=app, key_func=lambda: request.host_url)
-''', default_limits=config.limiter_filter['default_limits'])
-'''
+limiter = Limiter(app=app, key_func=lambda: request.json['username'], headers_enabled=True, default_limits=["1/second"])
+limit = limiter.limit("10/second", error_message=Response(status=403), key_func=lambda: request.json['username'])
+
+@app.errorhandler(429)
+def ratelimit_handler(e):
+    return Response(status=403)
+
 @limiter.request_filter
 def filter_func():
     path_url = request.path
     white_list = config.limiter_filter['whitelist']
     if path_url in white_list:
-        return True
-    else:
         return False
+    else:
+        return True
 
 @app.route(config.const['base'] + '/', methods=['GET'])
 def index():
@@ -115,8 +118,9 @@ def index():
 
 # /authserver
 
-#@limiter.exempt 
-#@limiter.limit(limit_value="30/minute;5/second", key_func=get_remote_address)
+#@limiter.exempt
+#@limiter.limit("1/second", error_message=Response(status=403))
+@limit
 @app.route(config.const['base'] + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
@@ -310,7 +314,7 @@ def invalidate():
         finally:
             return Response(status=204)
             
-#@limiter.limit(limit_value="30/minute;1/second", key_func=lambda: request.host_url)
+@limit
 @app.route(config.const['base'] + '/authserver/signout', methods=['POST'])
 def signout():
     if request.is_json:
@@ -554,5 +558,9 @@ if __name__ == '__main__':
             f.write(private.save_pkcs1())
         with open(config.PUBLICKEY, 'w') as f:
             f.write(public.save_pkcs1())
+    if config.enable_utils:
+        import utils
+        utils.util_main(app)
 
+    app.wsgi_app = LighttpdCGIRootFix(app.wsgi_app)
     app.run(**config.runattr)

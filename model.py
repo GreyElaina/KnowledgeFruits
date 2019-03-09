@@ -12,15 +12,16 @@ import uuid
 import rsa
 import binascii
 import password
-'''
-dbinfo = config.dbtype[config.database['type']]'''
+
+dbinfo = config.dbtype[config.database['type']]
 db = {}
 '''
 for i in dbinfo['attrs']:
     for ii in dbinfo['attr'][i].keys():
         db[ii] = dbinfo['class'](**{i: dbinfo['attr'][i][ii]()}, **dbinfo['templates']())'''
-db['global'] = peewee.SqliteDatabase("./data/global.db")
-db['cache'] = peewee.SqliteDatabase("./data/cache.db")
+
+db['global'] = peewee.SqliteDatabase(config.database['connect_info']['global'])
+db['cache'] = peewee.SqliteDatabase(config.database['connect_info']['cache'])
 
 class db_user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()))
@@ -146,4 +147,6 @@ if __name__ == '__main__':
     #NewUser("test3@to2mbn.org", "asd123456")
     #NewProfile("testplayer", db_user.get(email='test3@to2mbn.org'), "490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png", Model='ALEX')
     #NewProfile("testplayer1", db_user.get(email='test3@to2mbn.org'), "1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png", Type='CAPE')
-    db['global'].create_tables([db_profile])
+    print(db_token.create_table())
+    #print(db['global'].connect())
+    #print(dbinfo['attr']['database'])

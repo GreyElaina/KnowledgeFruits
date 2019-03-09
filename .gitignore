@@ -114,3 +114,6 @@ Scripts
 share
 pip-selfcheck.json
 pyvenv.cfg
+
+node_modules
+static

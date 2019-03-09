@@ -13,7 +13,10 @@ const = {
 
 ServerName = "KnowledgeFruits - Minecrart Yggdrasil"
 
-# 数据库
+# 数据库配置
+# SQLITE不需要如下配置.
+## globalinfo内填host,post,user,password, connect_info内填库名,要两个,键不能改.
+
 database = {
     "type": "sqlite",
     "connect_info": {
@@ -22,7 +25,21 @@ database = {
     },
     'globalinfo': {}
 }
-
+'''
+database = {
+    "type": "mysql",
+    "connect_info": {
+        "global" : "kf",
+        "cache" : "cache"
+    },
+    'globalinfo': {
+        'host' : "while.originpages.com",
+        'port' : 3306,
+        'user' : "root",
+        'password' : "Sdl930402"
+    }
+}
+'''
 # Peewee用
 dbtype = {
     "sqlite": {
@@ -43,13 +60,14 @@ dbtype = {
             "database" : {
                 i : lambda: database['connect_info'][i] for i in database['connect_info'].keys()
             }
-        }
+        },
+        "then" : "connect"
     }
 }
 
 # 访问速率限制相关(flask-limiter)
 limiter_filter = {
-    'whitelist' : [],
+    'whitelist' : [const['base'] + "/authserver/authenticate", const['base'] + '/authserver/signout'],
     'default_limits' : ["100/second"]
 }
 
@@ -73,7 +91,8 @@ salt = r'sX*h}b<.$&$vt8mzgS%9IE6nXe3EU|=`'
 runattr = {
     "debug" : True,
     'host' : '0.0.0.0',
-    'port' : '5001'
+    'port' : '5001',
+    #'ssl_context' :'adhoc'
 }
 
 # texture目录
@@ -109,4 +128,11 @@ PUBLICKEY = './data/public.pem'
 
 util = {
     "minLength" : 8
+}
+
+# 是否启用内置的可视化管理(附带注册,登录,邮箱验证等.)
+# 该模块的配置在'utils_config'字典下.
+enable_utils = True
+utils_config = {
+    "base_url" : "/util"
 }
