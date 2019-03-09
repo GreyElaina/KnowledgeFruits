@@ -2,6 +2,7 @@ from flask import Response, render_template, request
 from config import utils_config
 from password import crypt as PasswordCrypt
 
+
 def util_main(app):
     @app.route("/static/<name>", methods=['GET'])
     def utils_static(name):

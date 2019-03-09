@@ -16,9 +16,9 @@ import simplejson
 from flask_apscheduler import APScheduler
 from os.path import exists as FileExists
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
+import pydblite
 
 app = Flask(__name__)
-
 class FlaskConfig(object):
     JOBS = [
         {
@@ -35,6 +35,10 @@ class FlaskConfig(object):
             'trigger': 'interval',
             'minutes' : config.ClearTokenMinute
         },
+    ]
+
+    SCHEDULER_API_ENABLED = True
+'''
         {
             'id': "ChangeItemStatus",
             'func': "main:ChangeItemStatus",
@@ -48,11 +52,7 @@ class FlaskConfig(object):
             'args': (),
             'trigger': 'interval',
             'seconds' : config.RunMinute_Delete
-        }
-    ]
-
-    SCHEDULER_API_ENABLED = True
-
+        }'''
 def OutTime(token):
     '''
     token.status = \
@@ -92,14 +92,14 @@ crontab = APScheduler()
 crontab.init_app(app)
 crontab.start()
 
-limiter = Limiter(app=app, key_func=lambda: request.json['username'], headers_enabled=True, default_limits=["1/second"])
-limit = limiter.limit("10/second", error_message=Response(status=403), key_func=lambda: request.json['username'])
+#limiter = Limiter(app=app, key_func=lambda: request.json['username'], headers_enabled=True, default_limits=["1/second"])
+#limit = limiter.limit("10/second", error_message=Response(status=403), key_func=lambda: request.json['username'])
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
     return Response(status=403)
 
-@limiter.request_filter
+#@limiter.request_filter
 def filter_func():
     path_url = request.path
     white_list = config.limiter_filter['whitelist']
@@ -120,7 +120,7 @@ def index():
 
 #@limiter.exempt
 #@limiter.limit("1/second", error_message=Response(status=403))
-@limit
+#@limit
 @app.route(config.const['base'] + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
@@ -183,6 +183,7 @@ def refresh():
     if request.is_json:
         data = request.json
         print(r"data:", data)
+        Can = False
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
         try:
@@ -240,6 +241,8 @@ def refresh():
                         'errorMessage' : "Attempting to bind a token to a role that does not belong to its corresponding user."
                     }
                     return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                TokenSelected = model.findprofilebyid(PostProfile['id']).uuid
+                Can = True
 
         NewToken = model.db_token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=ClientToken, email=OldToken.email, bind=TokenSelected)
         NewToken.save()
@@ -250,14 +253,16 @@ def refresh():
             #'selectedProfile' : {}
         }
         if TokenProfile:
-            IReturn['selectedProfile'] = model.format_profile(TokenProfile)
+            IReturn['selectedProfile'] = model.format_profile(TokenProfile, unsigned=True)
         print(AccessToken)
         print(NewToken.accessToken)
         print(ClientToken)
-        print(IReturn)
+        if Can:
+            IReturn['selectedProfile'] = model.format_profile(model.findprofilebyid(PostProfile['id']), unsigned=True)
         if 'requestUser' in data:
             if data['requestUser']:
                 IReturn['user'] = model.format_user(User)
+        print(IReturn)
         return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const['base'] + "/authserver/validate", methods=['POST'])
@@ -297,10 +302,18 @@ def invalidate():
         ClientToken = data['clientToken'] if "clientToken" in data else None
         #print("tesst:", data)
         try:
-            if not ClientToken:
-                result = model.db_token.get(model.db_token.accessToken == AccessToken)
+            if ClientToken == None:
+                try:
+                    result = model.db_token.get(model.db_token.accessToken == AccessToken)
+                except Exception as e:
+                    if "db_tokenDoesNotExist" == e.__class__.__name__:
+                        return Response(status=204)
             else:
-                result = model.db_token.get(model.db_token.accessToken == AccessToken, model.db_token.clientToken == ClientToken)
+                try:
+                    result = model.db_token.get(model.db_token.accessToken == AccessToken & model.db_token.clientToken == ClientToken)
+                except Exception as e:
+                    if "db_tokenDoesNotExist" == e.__class__.__name__:
+                        result = model.db_token.get(model.db_token.accessToken == AccessToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
                 error = {
@@ -308,18 +321,17 @@ def invalidate():
                     'errorMessage' : "Invalid token."
                 }
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                #return Response(status=204)
             raise e
         else:
             result.delete_instance()
-        finally:
             return Response(status=204)
-            
-@limit
+
+#@limit
 @app.route(config.const['base'] + '/authserver/signout', methods=['POST'])
 def signout():
     if request.is_json:
         data = request.json
-        print(data['username'])
         email = data['username']
         passwd = data['password']
         try:
@@ -366,25 +378,24 @@ def joinserver():
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if "clientToken" in data else None
 
-        TokenValidate = False
-        try:
-            if not ClientToken:
-                result = model.db_token.get(model.db_token.accessToken == AccessToken)
-            else:
-                result = model.db_token.get(model.db_token.accessToken == AccessToken, model.db_token.clientToken == ClientToken)
-        except Exception as e:
-            if "db_tokenDoesNotExist" == e.__class__.__name__:
-                pass
-            raise e
-        else:
-            if not result.status in [2,1]:
-                TokenValidate = True
-                token = result
+        TokenValidate = model.is_validate(AccessToken, ClientToken)
         
         if TokenValidate:
             # Token有效
             # uuid = token.bind
-            result = model.db_profile.get(uuid=token.bind)
+            token = model.gettoken(AccessToken, ClientToken)
+            if token.bind:
+                try:
+                    result = model.db_profile.get(uuid=token.bind)
+                except Exception as e:
+                    if "db_profileDoesNotExist" == e.__class__.__name__:
+                        return Response(status=404)
+                    raise e
+            else:
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    "errorMessage" : "Invalid token."
+                }), status=403, mimetype="application/json; charset=utf-8")
             playeruuid = model.db_profile.get(name=result.name).format_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
                 sj = model.ms_serverjoin(
@@ -396,9 +407,15 @@ def joinserver():
                 sj.save()
                 return Response(status=204)
             else:
-                return Response(status=404)
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    "errorMessage" : "Invalid token."
+                }), status=403, mimetype="application/json; charset=utf-8")
         else:
-            return Response(status=404)
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                "errorMessage" : "Invalid token."
+            }), status=403, mimetype="application/json; charset=utf-8")
 
 @app.route(config.const['base'] + "/sessionserver/session/minecraft/hasJoined", methods=['GET'])
 def PlayerHasJoined():
@@ -407,56 +424,92 @@ def PlayerHasJoined():
     PlayerName = args['username']
     RemoteIP = args['ip'] if 'ip' in args else None
     Successful = False
-
     try:
         JoinInfo = model.ms_serverjoin.get(ServerID=ServerID)
         TokenInfo = model.db_token.get(accessToken=JoinInfo.AccessToken)
-        ProfileInfo = model.db_profile.get(uuid=TokenInfo.bind)
+        ProfileInfo = model.db_profile.get(uuid=TokenInfo.bind, name=PlayerName)
     except Exception as e:
         if "DoesNotExist" in e.__class__.__name__:
             return Response(status=204)
         raise e
-    
-    Successful = PlayerName == ProfileInfo.name and RemoteIP == JoinInfo.RemoteIP if RemoteIP else True
+
+    Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == JoinInfo.RemoteIP][bool(RemoteIP)]
     if Successful:
-        return simplejson.dumps(model.format_profile(ProfileInfo))
+        print(model.format_profile(ProfileInfo, Properties=True, unsigned=False))
+        return Response(simplejson.dumps(model.format_profile(ProfileInfo, Properties=True, noMetaData=True, unsigned=False)), mimetype="application/json; charset=utf-8")
     else:
         return Response(status=204)
+    return Response(status=204)
 
 @app.route(config.const['base'] + '/sessionserver/session/minecraft/profile/<getuuid>', methods=['GET'])
 def searchprofile(getuuid):
     args = request.args
-    unsigned = False
+    signed = False
+    IReturn = {}
+    print(args)
     if 'unsigned' in args:
-        if not args['unsigned'] == 'false':
-            unsigned = True
-    try:
-        IReturn = model.format_profile(
-            #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
-            model.db_profile.get(format_id=getuuid),
-            Properties=True,
-            unsigned=unsigned
-        )
-    except Exception as e:
-        if "DoesNotExist" in e.__class__.__name__:
-            return Response(status=204)
-        raise e
-    return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        signed = True if args['unsigned'] == 'true' else False
+        #signed = False if args['unsigned'] == 'false' else True
+        if args['unsigned'] == 'false':
+            try:
+                result = model.db_profile.get(format_id=getuuid)
+                IReturn = model.format_profile(
+                    #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
+                    result,
+                    Properties=True,
+                    unsigned=False,
+                    noMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                )
+            except Exception as e:
+                if "DoesNotExist" in e.__class__.__name__:
+                    return Response(status=204)
+                raise e
+            return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        if args['unsigned'] == 'true':
+            try:
+                result = model.db_profile.get(format_id=getuuid)
+                IReturn = model.format_profile(
+                    #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
+                    result,
+                    Properties=True,
+                    unsigned=True,
+                    noMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                )
+            except Exception as e:
+                if "DoesNotExist" in e.__class__.__name__:
+                    return Response(status=204)
+                raise e
+            return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+    else:
+        try:
+            result = model.db_profile.get(format_id=getuuid)
+            IReturn = model.format_profile(
+                #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
+                result,
+                Properties=True,
+                unsigned=True,
+                noMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+            )
+        except Exception as e:
+            if "DoesNotExist" in e.__class__.__name__:
+                return Response(status=204)
+            raise e
+        return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const['base'] + '/api/profiles/minecraft', methods=['POST'])
 def searchmanyprofile():
     if request.is_json:
         data = list(set(list(request.json)))
-        IReturn = []
-        print(data)
+        print(request.json)
+        IReturn = list()
         for i in range(config.MaxSearch - 1):
             try:
-                IReturn.append(model.format_profile(model.db_profile.select().where((model.db_profile.name==data[i]) & (model.db_profile.ismain == True)).get()))
+                IReturn.append(model.format_profile(model.db_profile.select().where((model.db_profile.name==data[i]) & (model.db_profile.ismain == True)).get(), unsigned=True))
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
                     continue
         print(IReturn)
-        return simplejson.dumps(IReturn)
+        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
     return Response(status=404)
 
 # /sessionserver
@@ -554,9 +607,9 @@ if __name__ == '__main__':
     if False in [FileExists(config.RSAPEM), FileExists(config.PUBLICKEY)]:
         import rsa
         (public, private) = rsa.newkeys(2048)
-        with open(config.RSAPEM, 'w') as f:
+        with open(config.RSAPEM, 'wb') as f:
             f.write(private.save_pkcs1())
-        with open(config.PUBLICKEY, 'w') as f:
+        with open(config.PUBLICKEY, 'wb') as f:
             f.write(public.save_pkcs1())
     if config.enable_utils:
         import utils

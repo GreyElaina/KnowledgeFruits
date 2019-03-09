@@ -12,6 +12,10 @@ import uuid
 import rsa
 import binascii
 import password
+import pydblite
+from OpenSSL.crypto import load_privatekey, FILETYPE_PEM, sign
+import hashlib
+ 
 
 dbinfo = config.dbtype[config.database['type']]
 db = {}
@@ -22,7 +26,7 @@ for i in dbinfo['attrs']:
 
 db['global'] = peewee.SqliteDatabase(config.database['connect_info']['global'])
 db['cache'] = peewee.SqliteDatabase(config.database['connect_info']['cache'])
-
+Dblite = pydblite.Base("./data/utils-cache.db")
 class db_user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()))
     email = peewee.CharField()
@@ -79,14 +83,14 @@ def CreateProfile(profile, pngname):
     db.save()
     os.rename(config.texturepath + pngname, config.texturepath + hashvalue + ".png")
 
-def format_texture(profile):
+def format_texture(profile, noMetaData=False):
     OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
     db_data = db_profile.get(uuid=OfflineUUID)
     db_datas = db_profile.select().where(db_profile.uuid==OfflineUUID)
     #print(type(db_data.time))
     IReturn = {
         "timestamp" : round(float(db_data.time)),
-        'profileId' : db_data.uuid.replace("-", ""),
+        'profileId' : db_data.format_id,
         'profileName' : db_data.name,
         'textures' : {
             i.type : {
@@ -97,14 +101,17 @@ def format_texture(profile):
             } for i in db_datas
         }
     }
+    if noMetaData:
+        for i in IReturn['textures'].keys():
+            del IReturn['textures'][i]["metadata"]
     return IReturn
 
-def format_profile(profile, unsigned=False, Properties=False):
-    def sha1withrsa(text):
-        key = open("./data/rsa.pem").read()
-        signature = rsa.sign(text, rsa.PrivateKey.load_pkcs1(key), 'SHA-1')
-        return binascii.hexlify(signature)
-    textures = simplejson.dumps(format_texture(profile))
+def format_profile(profile, unsigned=False, Properties=False, noMetaData=False):
+    def sign_self(data, key_file):
+        key_file = open(key_file, 'r').read()
+        key = load_privatekey(FILETYPE_PEM, key_file)
+        return base64.b64encode(sign(key, data, 'sha1'))
+    textures = simplejson.dumps(format_texture(profile, noMetaData))#
     IReturn = {
         "id" : profile.format_id,
         "name" : profile.name,
@@ -113,13 +120,72 @@ def format_profile(profile, unsigned=False, Properties=False):
         IReturn['properties'] = [
             {
                 "name": 'textures',
-                'value' : base64.b64encode(textures.encode("utf-8")),
+                'value' : bytes(base64.b64encode(textures.encode("utf-8"))).decode("utf-8"),
             }
         ]
-        if unsigned == False:
-            IReturn['properties'][0]['signature'] = sha1withrsa(base64.b64encode(textures.encode("utf-8")))
-
+        if not unsigned:
+            for i in range(len(IReturn['properties'])):
+                IReturn['properties'][i]['signature'] = bytes(sign_self(base64.b64encode(IReturn['properties'][i]['value'].encode("utf-8")), "./data/rsa.pem")).decode("utf-8")
+            #print("faq: ", IReturn)
     return IReturn
+
+def is_validate(AccessToken, ClientToken=None):
+    try:
+        if not ClientToken:
+            try:
+                result = db_token.get(db_token.accessToken == AccessToken)
+            except Exception as e:
+                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    return False
+        else:
+            try:
+                result = db_token.get(db_token.accessToken == AccessToken & db_token.clientToken == ClientToken)
+            except Exception as e:
+                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    result = db_token.get(db_token.accessToken == AccessToken)
+    except Exception as e:
+        if "db_tokenDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        if result.status in [2,1]:
+            return False
+        else:
+            return True
+
+def gettoken(AccessToken, ClientToken=None):
+    try:
+        if not ClientToken:
+            try:
+                result = db_token.get(db_token.accessToken == AccessToken)
+            except Exception as e:
+                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    return False
+        else:
+            try:
+                result = db_token.get(db_token.accessToken == AccessToken & db_token.clientToken == ClientToken)
+            except Exception as e:
+                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    result = db_token.get(db_token.accessToken == AccessToken)
+    except Exception as e:
+        if "db_tokenDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        if result.status in [2,1]:
+            return False
+        else:
+            return result
+
+def findprofilebyid(fid):
+    try:
+        result = db_profile.select().where(db_profile.format_id == fid)
+    except Exception as e:
+        if "db_profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result.get()
 
 def format_user(user):
     return {
@@ -150,3 +216,4 @@ if __name__ == '__main__':
     print(db_token.create_table())
     #print(db['global'].connect())
     #print(dbinfo['attr']['database'])
+    Dblite.create("id")

@@ -69,9 +69,20 @@ def PngBinHash(SkinPath):
                     'B' : dot[2],
                     'A' : dot[3],
                 }
-                Buf.write(ImageInfo['A'])
-                Buf.write(ImageInfo['R'])
-                Buf.write(ImageInfo['G'])
-                Buf.write(ImageInfo['B'])
+                if ImageInfo['A'] == 0:
+                    Buf.write(bytes([0]))
+                    Buf.write(bytes([0]))
+                    Buf.write(bytes([0]))
+                    Buf.write(bytes([0]))
+                else:
+                    Buf.write(ImageInfo['A'])
+                    Buf.write(ImageInfo['R'])
+                    Buf.write(ImageInfo['G'])
+                    Buf.write(ImageInfo['B'])
 
         return hashlib.sha256(Buf.getvalue()).hexdigest()
+
+if __name__ == "__main__":
+    #print(PngBinHash("./data/texture/1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png") == '8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee')
+    #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
+    pass
