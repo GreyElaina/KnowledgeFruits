@@ -25,7 +25,7 @@ for i in dbinfo['attrs']:
         db[ii] = dbinfo['class'](**{i: dbinfo['attr'][i][ii]()}, **dbinfo['templates']())'''
 
 db['global'] = peewee.SqliteDatabase(config.database['connect_info']['global'])
-db['cache'] = peewee.SqliteDatabase(config.database['connect_info']['cache'])
+db['cache'] = peewee.SqliteDatabase(":memory:")
 Dblite = pydblite.Base("./data/utils-cache.db")
 class db_user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()))
@@ -207,6 +207,8 @@ def NewUser(email, passwd):
         password=password.crypt(passwd, salt),
         passwordsalt=salt
     ).save()
+
+db['cache'].create_tables([ms_serverjoin])
 
 if __name__ == '__main__':
     #NewUser("test@gmail.com", "asd123456")
