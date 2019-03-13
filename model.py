@@ -25,7 +25,7 @@ for i in dbinfo['attrs']:
         db[ii] = dbinfo['class'](**{i: dbinfo['attr'][i][ii]()}, **dbinfo['templates']())'''
 
 db['global'] = peewee.SqliteDatabase(config.database['connect_info']['global'])
-db['cache'] = peewee.SqliteDatabase(":memory:")
+db['cache'] = peewee.SqliteDatabase(config.database['connect_info']['cache'])
 Dblite = pydblite.Base("./data/utils-cache.db")
 class db_user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()))
