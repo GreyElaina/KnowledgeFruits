@@ -7,7 +7,6 @@ import base
 import os
 import simplejson
 import base64
-from OpenSSL.crypto import load_privatekey, FILETYPE_PEM, sign
 import uuid
 import rsa
 import binascii
@@ -15,7 +14,7 @@ import password
 import pydblite
 from OpenSSL.crypto import load_privatekey, FILETYPE_PEM, sign
 import hashlib
- 
+
 
 dbinfo = config.dbtype[config.database['type']]
 db = {}
@@ -55,7 +54,7 @@ class db_profile(peewee.Model):
     name = peewee.CharField()
     type = peewee.CharField(default='SKIN')
     model = peewee.CharField(default='STEVE')
-    hash = peewee.CharField()
+    hash = peewee.CharField(null=True)
     time = peewee.CharField(default=str(int(time.time())))
     createby = peewee.CharField() # 谁创建的角色?  邮箱
     ismain = peewee.BooleanField(default=True)
@@ -83,7 +82,7 @@ def CreateProfile(profile, pngname):
     db.save()
     os.rename(config.texturepath + pngname, config.texturepath + hashvalue + ".png")
 
-def format_texture(profile, noMetaData=False):
+def format_texture(profile, unMetaData=False):
     OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
     db_data = db_profile.get(uuid=OfflineUUID)
     db_datas = db_profile.select().where(db_profile.uuid==OfflineUUID)
@@ -101,17 +100,22 @@ def format_texture(profile, noMetaData=False):
             } for i in db_datas
         }
     }
-    if noMetaData:
+    if unMetaData:
         for i in IReturn['textures'].keys():
             del IReturn['textures'][i]["metadata"]
     return IReturn
 
-def format_profile(profile, unsigned=False, Properties=False, noMetaData=False):
+def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, BetterData=False):
     def sign_self(data, key_file):
         key_file = open(key_file, 'r').read()
-        key = load_privatekey(FILETYPE_PEM, key_file)
-        return base64.b64encode(sign(key, data, 'sha1'))
-    textures = simplejson.dumps(format_texture(profile, noMetaData))#
+        key = rsa.PrivateKey.load_pkcs1(key_file.encode('utf-8'))
+        return bytes(base64.b64encode(rsa.sign(data.encode("utf-8"), key, 'SHA-1'))).decode("utf-8")
+    if BetterData:
+        if not [True, False][profile.type == "SKIN" and profile.model == "ALEX"]:
+            unMetaData = False
+        else:
+            unMetaData = True
+    textures = simplejson.dumps(format_texture(profile, unMetaData))
     IReturn = {
         "id" : profile.format_id,
         "name" : profile.name,
@@ -120,13 +124,12 @@ def format_profile(profile, unsigned=False, Properties=False, noMetaData=False):
         IReturn['properties'] = [
             {
                 "name": 'textures',
-                'value' : bytes(base64.b64encode(textures.encode("utf-8"))).decode("utf-8"),
+                'value' : base64.b64encode(textures.encode("utf-8")).decode("utf-8"),
             }
         ]
         if not unsigned:
             for i in range(len(IReturn['properties'])):
-                IReturn['properties'][i]['signature'] = bytes(sign_self(base64.b64encode(IReturn['properties'][i]['value'].encode("utf-8")), "./data/rsa.pem")).decode("utf-8")
-            #print("faq: ", IReturn)
+                IReturn['properties'][i]['signature'] = sign_self(IReturn['properties'][i]['value'], "./data/rsa.pem")
     return IReturn
 
 def is_validate(AccessToken, ClientToken=None):
@@ -176,6 +179,26 @@ def gettoken(AccessToken, ClientToken=None):
             return False
         else:
             return result
+
+def getprofile(name):
+    try:
+        result = db_profile.select().where(db_profile.name == name)
+    except Exception as e:
+        if "db_profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def getuser(email):
+    try:
+        result = db_user.select().where(db_user.email == email)
+    except Exception as e:
+        if "db_userDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
 
 def findprofilebyid(fid):
     try:

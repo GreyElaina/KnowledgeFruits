@@ -84,7 +84,7 @@ TokenOutTime = {
     'needF5' : lambda time: time <= (TimeRange * NeedF5) and time >= (TimeRange * CanUse)
 }
 
-# 没啥卵用的salt
+# 用于session加密,建议使用CreateSalt函数重新创建一份
 salt = r'sX*h}b<.$&$vt8mzgS%9IE6nXe3EU|=`'
 
 # app.run()函数运行参数

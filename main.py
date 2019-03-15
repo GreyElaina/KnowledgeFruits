@@ -17,8 +17,10 @@ from flask_apscheduler import APScheduler
 from os.path import exists as FileExists
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
 import pydblite
+import base64
 
 app = Flask(__name__)
+app.config['SECRET_KEY'] = config.salt
 class FlaskConfig(object):
     JOBS = [
         {
@@ -91,9 +93,11 @@ app.config.from_object(FlaskConfig())
 crontab = APScheduler()
 crontab.init_app(app)
 crontab.start()
-
-#limiter = Limiter(app=app, key_func=lambda: request.json['username'], headers_enabled=True, default_limits=["1/second"])
-#limit = limiter.limit("10/second", error_message=Response(status=403), key_func=lambda: request.json['username'])
+cache = {
+    'Login_randomkeys' : {}
+}
+limiter = Limiter(headers_enabled=True, default_limits=["1/second"])
+limit = limiter.limit("1/second", key_func=get_remote_address)
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
@@ -120,7 +124,7 @@ def index():
 
 #@limiter.exempt
 #@limiter.limit("1/second", error_message=Response(status=403))
-#@limit
+@limit
 @app.route(config.const['base'] + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
@@ -435,8 +439,13 @@ def PlayerHasJoined():
 
     Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == JoinInfo.RemoteIP][bool(RemoteIP)]
     if Successful:
-        print(model.format_profile(ProfileInfo, Properties=True, unsigned=False))
-        return Response(simplejson.dumps(model.format_profile(ProfileInfo, Properties=True, noMetaData=True, unsigned=False)), mimetype="application/json; charset=utf-8")
+        result = simplejson.dumps(model.format_profile(
+            ProfileInfo,
+            Properties=True,
+            unsigned=False,
+            BetterData=True
+        ))
+        return Response(result, mimetype="application/json; charset=utf-8")
     else:
         return Response(status=204)
     return Response(status=204)
@@ -458,7 +467,7 @@ def searchprofile(getuuid):
                     result,
                     Properties=True,
                     unsigned=False,
-                    noMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                    unMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
                 )
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
@@ -473,7 +482,7 @@ def searchprofile(getuuid):
                     result,
                     Properties=True,
                     unsigned=True,
-                    noMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                    unMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
                 )
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
@@ -488,7 +497,7 @@ def searchprofile(getuuid):
                 result,
                 Properties=True,
                 unsigned=True,
-                noMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                unMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
             )
         except Exception as e:
             if "DoesNotExist" in e.__class__.__name__:
@@ -514,6 +523,103 @@ def searchmanyprofile():
 
 # /sessionserver
 
+#####################
+
+# /api/knowledgefruits/
+@app.route("/api/knowledgefruits/login/randomkey", methods=['POST'])
+def kf_login_randomkey():
+    if request.is_json:
+        data = request.json
+        Randomkey = password.CreateSalt(length=8)
+        authid = data['authid'] if 'authid' in data else str(uuid.uuid4()).replace('-', '')
+        salt = password.CreateSalt(length=12)
+        user_result = model.getuser(data['username'])
+        if user_result:
+            IReturn = {
+                "authId" : authid,
+                "HashKey" : Randomkey,
+                "username" : user_result.email,
+                "salt" : salt
+            }
+            cache[authid] = {
+                "HashKey" : Randomkey,
+                "username" : user_result.email,
+                "salt" : salt,
+                "VerifyValue" : user_result.password
+            }
+            return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        else:
+            return Response(status=403)
+
+@app.route("/api/knowledgefruits/login/randomkey/verify", methods=['POST'])
+def kf_login_verify():
+    if request.is_json:
+        data = request.json
+        try:
+            cache_result = cache[data['authId']]
+        except KeyError:
+            return Response(status=403)
+        else:
+            user_result = model.getuser(cache_result['username'])
+            if user_result:
+                AuthRequest = password.crypt(user_result.password, cache_result['HashKey'])
+                if AuthRequest == data['Password']:
+                    Token = model.db_token(accessToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user.email)
+                    Token.save() # 颁发Token
+
+                    IReturn = {
+                        "accessToken" : Token.accessToken,
+                        "clientToken" : Token.clientToken
+                    }
+                    return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+                else:
+                    error = {
+                        'error' : "ForbiddenOperationException",
+                        'errorMessage' : "Invalid credentials. Invalid username or password."
+                    }
+                    return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            else:
+                return Response(status=403)
+            
+@app.route("/api/knowledgefruits/user/changepassword/<username>", methods=['POST'])
+def kf_user_changepasswd(username):
+    if request.is_json:
+        data = request.json
+        user_result = model.getuser(username)
+        if user_result:
+            AccessToken = data['accessToken']
+            ClientToken = data['clientToken'] if 'clientToken' in data else None
+            if not ClientToken:
+                token_result_boolean = model.is_validate(AccessToken)
+                token = model.gettoken(AccessToken)
+            else:
+                token_result_boolean = model.is_validate(AccessToken, ClientToken)
+                token = model.gettoken(AccessToken, ClientToken)
+            if token_result_boolean and token:
+                # 如果Token有效
+                # 开始解析由公钥(/api/yggdrasil)加密的东西
+                # 这玩意是个base64
+                encrypt = base64.b64decode(data['Password'])
+                decrypt_message = password.decrypt(encrypt, config.RSAPEM)
+                user = model.getuser(token.email).get()
+                newsalt = base.CreateSalt(length=8)
+                newpassword = password.crypt(decrypt_message, newsalt)
+                user.password = newpassword
+                user.passwordsalt = newsalt
+                user.save()
+                #开始否决所有的Token
+                model.db_token.delete().where(model.db_token.email == user.email).execute()
+                return Response(status=204)
+            else:
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    "errorMessage" : "Invalid token."
+                }), status=403, mimetype="application/json; charset=utf-8")
+        else:
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                "errorMessage" : "Invalid token."
+            }), status=403, mimetype="application/json; charset=utf-8")
 #####################
 
 # /utils
