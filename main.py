@@ -526,14 +526,22 @@ def searchmanyprofile():
 #####################
 
 # /api/knowledgefruits/
+@app.route("/api/knowledgefruits/", methods=['GET', 'POST'])
+def serverinfo():
+    return Response(simplejson.dumps({
+        "Yggdrasil" : {
+            "BaseUrl" : config.const['base']
+        }
+    }), mimetype='application/json; charset=utf-8')
+
 @app.route("/api/knowledgefruits/login/randomkey", methods=['POST'])
 def kf_login_randomkey():
     if request.is_json:
         data = request.json
         Randomkey = password.CreateSalt(length=8)
         authid = data['authid'] if 'authid' in data else str(uuid.uuid4()).replace('-', '')
-        salt = password.CreateSalt(length=12)
-        user_result = model.getuser(data['username'])
+        user_result = model.getuser(data['username']).get()
+        salt = user_result.passwordsalt
         if user_result:
             IReturn = {
                 "authId" : authid,
@@ -545,7 +553,8 @@ def kf_login_randomkey():
                 "HashKey" : Randomkey,
                 "username" : user_result.email,
                 "salt" : salt,
-                "VerifyValue" : user_result.password
+                "VerifyValue" : user_result.password,
+                "authId" : authid
             }
             return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
         else:
@@ -560,11 +569,11 @@ def kf_login_verify():
         except KeyError:
             return Response(status=403)
         else:
-            user_result = model.getuser(cache_result['username'])
+            user_result = model.getuser(cache_result['username']).get()
             if user_result:
                 AuthRequest = password.crypt(user_result.password, cache_result['HashKey'])
                 if AuthRequest == data['Password']:
-                    Token = model.db_token(accessToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user.email)
+                    Token = model.db_token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user_result.email)
                     Token.save() # 颁发Token
 
                     IReturn = {
