@@ -1,0 +1,53 @@
+{
+    "const": {
+        "base" : "/api/yggdrasil",
+        "debug" : "/debug",
+        "util" : "/util"
+    },
+    "database": {
+        "type": "SqliteDatabase",
+        "connect_info": {
+            "global_db": "./data/global.db",
+            "cache": "./data/cache.db"
+        },
+        "globalinfo": {},
+        "other": {
+            "global": {},
+            "cache": {}
+        }
+    },
+    "TokenTime": {
+        "RefrushTime": 5,
+        "EnableTime": 3,
+        "TimeRange": 86400
+    },
+    "salt": "sX*h-b<.$&$vt8mzgS%9IE6nXe3EU|=`",
+    "AdditionalParameters": {
+        "debug": true,
+        "host": "0.0.0.0",
+        "port": "5001",
+        "threaded": true
+    },
+    "TexturePath": "./data/texture/",
+    "HostUrl": "http://192.168.31.189:5001",
+    "ScavengerSetting": {
+        "CheckStatus": 1,
+        "DeleteDisabled": 2
+    },
+    "ProfileSearch": {
+        "MaxAmount": 8
+    },
+    "YggdrasilIndexData": {
+        "serverName" : "KnowledgeFruits - Minecrart Yggdrasil",
+        "implementationName" : "knowledge_fruits",
+        "implementationVersion" : "v0.0.1"
+    },
+    "SiteDomain": [
+        "192.168.31.189",
+        "127.0.0.1"
+    ],
+    "KeyPath": {
+        "Private": "./data/rsa.pem",
+        "Public": "./data/public.pem"
+    }
+}

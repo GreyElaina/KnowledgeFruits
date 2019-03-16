@@ -1,5 +1,4 @@
 from flask import Flask, url_for, Response, request, abort, render_template, session
-import config
 import peewee
 import time
 import datetime
@@ -18,6 +17,9 @@ from os.path import exists as FileExists
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
 import pydblite
 import base64
+import os
+
+config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
@@ -28,14 +30,14 @@ class FlaskConfig(object):
             'func': 'main:CheckTokenStatus',
             'args': (),
             'trigger': 'interval',
-            'minutes' : config.ChangeTokenStatus
+            'minutes' : config.ScavengerSetting.CheckStatus
         },
         {
             'id': 'ClearDisabledTokens',
             'func': 'main:DeleteDisabledToken',
             'args': (),
             'trigger': 'interval',
-            'minutes' : config.ClearTokenMinute
+            'minutes' : config.ScavengerSetting.DeleteDisabled
         },
     ]
 
@@ -62,9 +64,11 @@ def OutTime(token):
         2 if not config.TokenOutTime['NeedF5'](time.time() - time.mktime(token.setuptime.timetuple())) else\
         0
     '''
-    if config.TokenOutTime['canUse'](time.time() - time.mktime(token.setuptime.timetuple())):
+    Enable = lambda time: time <= (config.TokenTime.TimeRange * config.TokenTime.EnableTime)
+    Refrush = lambda time: time <= (config.TokenTime.TimeRange * config.TokenTime.RefrushTime) and time >= (config.TokenTime.TimeRange * config.TokenTime.EnableTime)
+    if Enable(time.time() - time.mktime(token.setuptime.timetuple())):
         token.status = 0
-    elif config.TokenOutTime['needF5'](time.time() - time.mktime(token.setuptime.timetuple())):
+    elif Refrush(time.time() - time.mktime(token.setuptime.timetuple())):
         token.status = 1
     else:
         token.status = 2
@@ -103,21 +107,13 @@ limit = limiter.limit("1/second", key_func=get_remote_address)
 def ratelimit_handler(e):
     return Response(status=403)
 
-#@limiter.request_filter
-def filter_func():
-    path_url = request.path
-    white_list = config.limiter_filter['whitelist']
-    if path_url in white_list:
-        return False
-    else:
-        return True
 
-@app.route(config.const['base'] + '/', methods=['GET'])
+@app.route(config.const.base + '/', methods=['GET'])
 def index():
     return Response(simplejson.dumps({
-        "meta" : config.IndexMeta,
+        "meta" : config.YggdrasilIndexData,
         "skinDomains": config.SiteDomain,
-        "signaturePublickey": open(config.PUBLICKEY, 'r').read()
+        "signaturePublickey": open(config.KeyPath.Public, 'r').read()
     }), mimetype='application/json; charset=utf-8')
 
 # /authserver
@@ -125,7 +121,7 @@ def index():
 #@limiter.exempt
 #@limiter.limit("1/second", error_message=Response(status=403))
 @limit
-@app.route(config.const['base'] + '/authserver/authenticate', methods=['POST'])
+@app.route(config.const.base + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
     if request.is_json:
@@ -182,7 +178,7 @@ def authenticate():
             return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
-@app.route(config.const['base'] + '/authserver/refresh', methods=['POST'])
+@app.route(config.const.base + '/authserver/refresh', methods=['POST'])
 def refresh():
     if request.is_json:
         data = request.json
@@ -258,18 +254,14 @@ def refresh():
         }
         if TokenProfile:
             IReturn['selectedProfile'] = model.format_profile(TokenProfile, unsigned=True)
-        print(AccessToken)
-        print(NewToken.accessToken)
-        print(ClientToken)
         if Can:
             IReturn['selectedProfile'] = model.format_profile(model.findprofilebyid(PostProfile['id']), unsigned=True)
         if 'requestUser' in data:
             if data['requestUser']:
                 IReturn['user'] = model.format_user(User)
-        print(IReturn)
         return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
-@app.route(config.const['base'] + "/authserver/validate", methods=['POST'])
+@app.route(config.const.base + "/authserver/validate", methods=['POST'])
 def validate():
     if request.is_json:
         data = request.json
@@ -298,7 +290,7 @@ def validate():
             else:
                 return Response(status=204)
 
-@app.route(config.const['base'] + "/authserver/invalidate", methods=['POST'])
+@app.route(config.const.base + "/authserver/invalidate", methods=['POST'])
 def invalidate():
     if request.is_json:
         data = request.json
@@ -332,7 +324,7 @@ def invalidate():
             return Response(status=204)
 
 #@limit
-@app.route(config.const['base'] + '/authserver/signout', methods=['POST'])
+@app.route(config.const.base + '/authserver/signout', methods=['POST'])
 def signout():
     if request.is_json:
         data = request.json
@@ -374,7 +366,7 @@ def signout():
 ################
 
 # /sessionserver
-@app.route(config.const['base'] + "/sessionserver/session/minecraft/join", methods=['POST'])
+@app.route(config.const.base + "/sessionserver/session/minecraft/join", methods=['POST'])
 def joinserver():
     token = {}
     if request.is_json:
@@ -421,7 +413,7 @@ def joinserver():
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
 
-@app.route(config.const['base'] + "/sessionserver/session/minecraft/hasJoined", methods=['GET'])
+@app.route(config.const.base + "/sessionserver/session/minecraft/hasJoined", methods=['GET'])
 def PlayerHasJoined():
     args = request.args
     ServerID = args['serverId']
@@ -450,7 +442,7 @@ def PlayerHasJoined():
         return Response(status=204)
     return Response(status=204)
 
-@app.route(config.const['base'] + '/sessionserver/session/minecraft/profile/<getuuid>', methods=['GET'])
+@app.route(config.const.base + '/sessionserver/session/minecraft/profile/<getuuid>', methods=['GET'])
 def searchprofile(getuuid):
     args = request.args
     signed = False
@@ -505,13 +497,13 @@ def searchprofile(getuuid):
             raise e
         return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
-@app.route(config.const['base'] + '/api/profiles/minecraft', methods=['POST'])
+@app.route(config.const.base + '/api/profiles/minecraft', methods=['POST'])
 def searchmanyprofile():
     if request.is_json:
         data = list(set(list(request.json)))
         print(request.json)
         IReturn = list()
-        for i in range(config.MaxSearch - 1):
+        for i in range(config.ProfileSearch.MaxAmount - 1):
             try:
                 IReturn.append(model.format_profile(model.db_profile.select().where((model.db_profile.name==data[i]) & (model.db_profile.ismain == True)).get(), unsigned=True))
             except Exception as e:
@@ -530,7 +522,7 @@ def searchmanyprofile():
 def serverinfo():
     return Response(simplejson.dumps({
         "Yggdrasil" : {
-            "BaseUrl" : config.const['base']
+            "BaseUrl" : config.const.base
         }
     }), mimetype='application/json; charset=utf-8')
 
@@ -580,14 +572,17 @@ def kf_login_verify():
                         "accessToken" : Token.accessToken,
                         "clientToken" : Token.clientToken
                     }
+                    del cache[data['authId']]
                     return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
                 else:
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Invalid credentials. Invalid username or password."
                     }
+                    del cache[data['authId']]
                     return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
+                del cache[data['authId']]
                 return Response(status=403)
             
 @app.route("/api/knowledgefruits/user/changepassword/<username>", methods=['POST'])
@@ -609,8 +604,10 @@ def kf_user_changepasswd(username):
                 # 开始解析由公钥(/api/yggdrasil)加密的东西
                 # 这玩意是个base64
                 encrypt = base64.b64decode(data['Password'])
-                decrypt_message = password.decrypt(encrypt, config.RSAPEM)
+                decrypt_message = password.decrypt(encrypt, config.KeyPath.Private)
                 user = model.getuser(token.email).get()
+                if password.crypt(decrypt_message, user.passwordsalt) == user.password:
+                    return Response(status=204)
                 newsalt = base.CreateSalt(length=8)
                 newpassword = password.crypt(decrypt_message, newsalt)
                 user.password = newpassword
@@ -629,75 +626,13 @@ def kf_user_changepasswd(username):
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
+
+
 #####################
-
-# /utils
-util = config.const['util']
-@app.route(util + "/Registry", methods=['POST'])
-def register():
-    if request.is_json:
-        data = request.json
-        email = re.match(r'^[0-9a-zA-Z\_\-]+(\.[0-9a-zA-Z\_\-]+)*@[0-9a-zA-Z]+(\.[0-9a-zA-Z]+){1,}$', data['email'])
-        if not email:
-            return Response(status=400)
-        
-        if len(data['password']) < config.util['minLength']:
-            return Response(status=400)
-        if not re.compile('[^a-zA-Z0-9]').search(data['password']):
-            return Response(status=400)
-
-        UserSalt = base.CreateSalt(length=8)
-        user = model.db_user(
-            email=email.string,
-            password=password.crypt(data['password'], UserSalt),
-            passwordsalt=UserSalt
-        )
-        user.save()
-        
-    else:
-        return Response(status=504)
-'''
-@app.route(util + "/Profile/New", methods=['POST'])
-def util_newprofile():
-    if request.is_json:
-        data = request.json
-        content = [
-            "accessToken" in data,
-            'playername' in data,
-            'pngfilename' in data
-        ]
-        CanContinue = False
-        if False in content:
-            return Response(status=400)
-        try:
-            token = model.db_token.get(accessToken=data["accessToken"])
-        except Exception as e:
-            if "DoesNotExist" in e.__class__.__name__:
-                return Response(status=404)
-        email = token.bind
-        
-        
-    else:
-        return Response(status=504)
-'''
-@app.route(config.const['debug'] + "/test", methods=['GET','POST'])
-def createprofile():
-    # 这里拿来测试
-    try:
-        profile = model.db_profile(
-            uuid=base.OfflinePlayerUUID("Chenwe_i_lin").replace('-',''),
-            name="Chenwe_i_lin",
-            hash=base.PngBinHash('./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png')
-        )
-        profile.save()
-        return ""
-    except Exception as e:
-        "DoesNotExist" in e.__class__.__name__
-
 @app.route("/texture/<image>", methods=['GET'])
 def imageview(image):
     try:
-        with open(config.const['cwd'] + "/data/texture/" + image + '.png', "rb") as f:
+        with open(os.getcwd() + "/data/texture/" + image + '.png', "rb") as f:
             image = f.read()
     except FileNotFoundError:
         raise NotFound(
@@ -719,16 +654,12 @@ if __name__ == '__main__':
     if FileExists('./data/global.db'):
         model.db['global'].create_tables([model.db_profile, model.db_token, model.db_user])
         model.db['global'].create_tables([model.ms_serverjoin])
-    if False in [FileExists(config.RSAPEM), FileExists(config.PUBLICKEY)]:
+    if False in [FileExists(config.KeyPath.Private), FileExists(config.KeyPath.Public)]:
         import rsa
         (public, private) = rsa.newkeys(2048)
-        with open(config.RSAPEM, 'wb') as f:
+        with open(config.KeyPath.Private, 'wb') as f:
             f.write(private.save_pkcs1())
-        with open(config.PUBLICKEY, 'wb') as f:
+        with open(config.KeyPath.Public, 'wb') as f:
             f.write(public.save_pkcs1())
-    if config.enable_utils:
-        import utils
-        utils.util_main(app)
-
     app.wsgi_app = LighttpdCGIRootFix(app.wsgi_app)
-    app.run(**config.runattr)
+    app.run(**config.AdditionalParameters)

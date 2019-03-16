@@ -2,7 +2,6 @@ import peewee
 import time
 from datetime import datetime
 from time import strftime
-import config
 import base
 import os
 import simplejson
@@ -11,21 +10,14 @@ import uuid
 import rsa
 import binascii
 import password
-import pydblite
 from OpenSSL.crypto import load_privatekey, FILETYPE_PEM, sign
 import hashlib
 
+config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 
-dbinfo = config.dbtype[config.database['type']]
 db = {}
-'''
-for i in dbinfo['attrs']:
-    for ii in dbinfo['attr'][i].keys():
-        db[ii] = dbinfo['class'](**{i: dbinfo['attr'][i][ii]()}, **dbinfo['templates']())'''
-
-db['global'] = peewee.SqliteDatabase(config.database['connect_info']['global'])
-db['cache'] = peewee.SqliteDatabase(config.database['connect_info']['cache'])
-Dblite = pydblite.Base("./data/utils-cache.db")
+db['global'] = peewee.__dict__[config.database.type](config.database.connect_info.global_db, **config.database.globalinfo)
+db['cache'] = peewee.__dict__[config.database.type](config.database.connect_info.cache, **config.database.globalinfo)
 class db_user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()))
     email = peewee.CharField()
@@ -77,10 +69,10 @@ class ms_serverjoin(peewee.Model):
 def CreateProfile(profile, pngname):
     OfflineUUID = base.OfflinePlayerUUID(profile.name)
     Name = profile.name
-    hashvalue = base.PngBinHash(config.texturepath + pngname)
+    hashvalue = base.PngBinHash(config.TexturePath + pngname)
     db = db_profile(uuid=OfflineUUID, name=Name, hash=hashvalue)
     db.save()
-    os.rename(config.texturepath + pngname, config.texturepath + hashvalue + ".png")
+    os.rename(config.TexturePath + pngname, config.TexturePath + hashvalue + ".png")
 
 def format_texture(profile, unMetaData=False):
     OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
@@ -93,7 +85,7 @@ def format_texture(profile, unMetaData=False):
         'profileName' : db_data.name,
         'textures' : {
             i.type : {
-                "url" : config.url + "/texture/" + i.hash,
+                "url" : config.HostUrl + "/texture/" + i.hash,
                 "metadata" : {
                     'model' : {"STEVE": 'default', "ALEX": 'slim'}[i.model]
                 } if i.type == 'SKIN' else {}
@@ -241,4 +233,3 @@ if __name__ == '__main__':
     print(db_token.create_table())
     #print(db['global'].connect())
     #print(dbinfo['attr']['database'])
-    Dblite.create("id")

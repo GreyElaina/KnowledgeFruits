@@ -1,4 +1,5 @@
 {
     "python.linting.enabled": true,
-    "python.linting.pylintPath": "python3 -m pylint"
+    "python.linting.pylintPath": "python3 -m pylint",
+    "python.pythonPath": "G:\\Tools\\Python36\\python3.exe"
 }

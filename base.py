@@ -82,6 +82,18 @@ def PngBinHash(SkinPath):
 
         return hashlib.sha256(Buf.getvalue()).hexdigest()
 
+class Dict(dict):
+    __setattr__ = dict.__setitem__
+    __getattr__ = dict.__getitem__
+ 
+def Dict2Object(Object):
+    if not isinstance(Object, dict):
+        return Object
+    inst=Dict()
+    for k,v in Object.items():
+        inst[k] = Dict2Object(v)
+    return inst
+
 if __name__ == "__main__":
     #print(PngBinHash("./data/texture/1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png") == '8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee')
     #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
