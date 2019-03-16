@@ -1,4 +1,4 @@
-from flask import Flask, url_for, Response, request, abort, render_template, session
+from flask import Flask, url_for, Response, request, abort, render_template, session, redirect
 import peewee
 import time
 import datetime
@@ -18,11 +18,13 @@ from werkzeug.contrib.fixers import LighttpdCGIRootFix
 import pydblite
 import base64
 import os
+from urllib.parse import urlparse
 
 config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
+#app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
 class FlaskConfig(object):
     JOBS = [
         {
@@ -42,21 +44,6 @@ class FlaskConfig(object):
     ]
 
     SCHEDULER_API_ENABLED = True
-'''
-        {
-            'id': "ChangeItemStatus",
-            'func': "main:ChangeItemStatus",
-            'args': (),
-            'trigger': 'interval',
-            'seconds' : config.RunMinute_Change
-        },
-        {
-            'id': "DeleteOuttimeItem",
-            'func': "main:DeleteOuttimeItem",
-            'args': (),
-            'trigger': 'interval',
-            'seconds' : config.RunMinute_Delete
-        }'''
 def OutTime(token):
     '''
     token.status = \
@@ -112,7 +99,7 @@ def ratelimit_handler(e):
 def index():
     return Response(simplejson.dumps({
         "meta" : config.YggdrasilIndexData,
-        "skinDomains": config.SiteDomain,
+        "skinDomains": config.SiteDomain if "SiteDomain" in config.__dict__ else [urlparse(request.url).netloc.split(":")[0]],
         "signaturePublickey": open(config.KeyPath.Public, 'r').read()
     }), mimetype='application/json; charset=utf-8')
 
@@ -627,7 +614,40 @@ def kf_user_changepasswd(username):
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
 
-
+@app.route('/api/knowledgefruits/profile/add', methods=['POST'])
+def profileadd():
+    if request.is_json:
+        data = request.json
+        AccessToken = data['accessToken']
+        ClientToken = data.get("clientToken")
+        if not ClientToken:
+            token_result_boolean = model.is_validate(AccessToken)
+            token = model.gettoken(AccessToken)
+        else:
+            token_result_boolean = model.is_validate(AccessToken, ClientToken)
+            token = model.gettoken(AccessToken, ClientToken)
+        if token_result_boolean:
+            #Token有效
+            Email = token.email
+            if re.match(base.StitchExpression(config.reMatch.PlayerName), data.get("PlayerName")):
+                PlayerName = data.get(PlayerName)
+                result = model.db_profile(
+                    uuid=base.OfflinePlayerUUID(PlayerName).replace("-", ""),
+                    name=PlayerName,
+                    createby=Email
+                )
+                result.save()
+                return Response(status=204)
+            else:
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    "errorMessage" : "Invalid token."
+                }), status=403, mimetype="application/json; charset=utf-8")
+        else:
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                "errorMessage" : "Invalid token."
+            }), status=403, mimetype="application/json; charset=utf-8")
 #####################
 @app.route("/texture/<image>", methods=['GET'])
 def imageview(image):

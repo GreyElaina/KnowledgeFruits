@@ -42,12 +42,18 @@
         "implementationName" : "knowledge_fruits",
         "implementationVersion" : "v0.0.1"
     },
-    "SiteDomain": [
-        "192.168.31.189",
-        "127.0.0.1"
-    ],
     "KeyPath": {
         "Private": "./data/rsa.pem",
         "Public": "./data/public.pem"
+    },
+    "reMatch": {
+        "PlayerName": {
+            "content": "[a-zA-Z0-9_-]",
+            "length": {
+                "min": 4,
+                "max": 16
+            },
+            "isSigner": true
+        }
     }
 }

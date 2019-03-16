@@ -66,6 +66,12 @@ class ms_serverjoin(peewee.Model):
     class Meta:
         database = db['cache']
 
+class textures(peewee.Model):
+    userid = peewee.CharField(32)
+    photoname = peewee.CharField()
+    class Meta:
+        database = db['global']
+
 def CreateProfile(profile, pngname):
     OfflineUUID = base.OfflinePlayerUUID(profile.name)
     Name = profile.name

@@ -25,7 +25,7 @@ const crypt = (Message, Salt) => {
     return crypto.SHA256(Message + Salt);
 };
 
-const auth = async function(email=document.getElementById("email").value, password=document.getElementById("passwd").value){
+const auth = function(email=document.getElementById("email").value, password=document.getElementById("passwd").value){
     let IReturn = {};
     axios.post(config.BaseUrl + "/api/knowledgefruits/login/randomkey", {
         "username": email
