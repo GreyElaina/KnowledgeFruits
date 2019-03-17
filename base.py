@@ -2,7 +2,8 @@ import hashlib
 import binascii
 import random
 from io import BytesIO
-from skimage import io
+#from skimage import io
+from PIL import Image
 import struct
 
 def hex2bin(hexstring):
@@ -52,7 +53,7 @@ def CreateSalt(length=32):
     while len(IReturn) != 32:
         IReturn += chars[random.randint(0, len(chars) - 1)]
     return IReturn
-
+'''
 def PngBinHash(SkinPath):
     Image = io.imread(SkinPath)
     Height = Image.shape[0]
@@ -69,17 +70,54 @@ def PngBinHash(SkinPath):
                     'B' : dot[2],
                     'A' : dot[3],
                 }
-                if ImageInfo['A'] == 0:
-                    Buf.write(bytes([0]))
-                    Buf.write(bytes([0]))
-                    Buf.write(bytes([0]))
-                    Buf.write(bytes([0]))
+                Buf.write(struct.pack(">I", ImageInfo['A']))
+                if ImageInfo['A'] == 0x00:
+                    Buf.write(struct.pack(">I", 0x00))
+                    Buf.write(struct.pack(">I", 0x00))
+                    Buf.write(struct.pack(">I", 0x00))
+                    continue
                 else:
-                    Buf.write(ImageInfo['A'])
-                    Buf.write(ImageInfo['R'])
-                    Buf.write(ImageInfo['G'])
-                    Buf.write(ImageInfo['B'])
+                    Buf.write(struct.pack(">I", ImageInfo['R']))
+                    Buf.write(struct.pack(">I", ImageInfo['G']))
+                    Buf.write(struct.pack(">I", ImageInfo['B']))
 
+        return hashlib.sha256(Buf.getvalue()).hexdigest()
+'''
+base = [str(x) for x in range(10)] + [ chr(x) for x in range(ord('A'),ord('A')+6)]
+def dec2hex(num):
+    l = []
+    if num < 0:
+        return '-' + dec2hex(abs(num))
+    while True:
+        num,rem = divmod(num, 16)
+        l.append(base[rem])
+        if num == 0:
+            return ''.join(l[::-1])
+
+def PngBinHash(SkinPath):
+    photo = Image.open(SkinPath)
+    width, height = photo.size
+    print(photo.getpixel((2,0)))
+    #return photo.getpixel((4, 4))
+    with BytesIO() as Buf:
+        Buf.write(struct.pack(">I", width))
+        Buf.write(struct.pack(">I", height))
+        for w in range(width):
+            for h in range(height):
+                data = list(photo.getpixel((w, h)))
+                Buf.write(data[3].to_bytes(1, "big"))
+                if data[3] == 0:
+                    Buf.write((0).to_bytes(1, "big"))
+                    Buf.write((0).to_bytes(1, "big"))
+                    Buf.write((0).to_bytes(1, "big"))
+                else:
+                    if [2,0] == [w, h]:
+                        print(data)
+                    if [3,0] == [w, h]:
+                        print(data)
+                    Buf.write(data[0].to_bytes(1, "big"))
+                    Buf.write(data[1].to_bytes(1, "big"))
+                    Buf.write(data[2].to_bytes(1, "big"))
         return hashlib.sha256(Buf.getvalue()).hexdigest()
 
 class Dict(dict):
@@ -98,6 +136,7 @@ def StitchExpression(Object):
     return "".join([Object.content, "{%s,%s}" % (Object.length.min, Object.length.max), "$" if Object.isSigner else ""])
 
 if __name__ == "__main__":
-    #print(PngBinHash("./data/texture/1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png") == '8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee')
+    print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
     #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
+    #print(PngBinHash("./data/texture/texture-hash-test.png"))
     pass

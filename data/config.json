@@ -29,7 +29,7 @@
         "threaded": true
     },
     "TexturePath": "./data/texture/",
-    "HostUrl": "http://192.168.31.189:5001",
+    "HostUrl": "http://127.0.0.1:5001",
     "ScavengerSetting": {
         "CheckStatus": 1,
         "DeleteDisabled": 2

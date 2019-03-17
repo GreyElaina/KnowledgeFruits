@@ -19,11 +19,14 @@ import pydblite
 import base64
 import os
 from urllib.parse import urlparse
+from datetime import timedelta
+import openid.server
 
 config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
+app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
 #app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
 class FlaskConfig(object):
     JOBS = [
@@ -68,8 +71,15 @@ def CheckTokenStatus():
     for i in model.db_token.select().where(model.db_token.status == 0 | model.db_token.status == 1):
         OutTime(i)
 
-def DeleteDisabledToken(): # 删除失效Token(token.status == 2)
+def DeleteDisabledToken():
+    # 删除失效Token(token.status == 2)
+    # 删除被封禁用户的所有Token(user.permission == 0)
     model.db_token.delete().where(model.db_token.status == 2).execute()
+    try:
+        for i in model.db_user.select().where(model.db_user.permission == 0):
+            model.db_token.delete().where(model.db_token.email == i.email)
+    except:
+        pass
 
 def ChangeItemStatus():
     for i in model.ms_serverjoin.select().where(model.ms_serverjoin.Out_timed == False):
@@ -87,8 +97,6 @@ crontab.start()
 cache = {
     'Login_randomkeys' : {}
 }
-limiter = Limiter(headers_enabled=True, default_limits=["1/second"])
-limit = limiter.limit("1/second", key_func=get_remote_address)
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
@@ -107,7 +115,6 @@ def index():
 
 #@limiter.exempt
 #@limiter.limit("1/second", error_message=Response(status=403))
-@limit
 @app.route(config.const.base + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
@@ -122,6 +129,12 @@ def authenticate():
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        if user.permission == 0:
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }), status=403, mimetype='application/json; charset=utf-8')
+
         SelectedProfile = {}
         AvailableProfiles = []
         if password.crypt(data['password'], user.passwordsalt) == user.password:
@@ -169,7 +182,6 @@ def authenticate():
 def refresh():
     if request.is_json:
         data = request.json
-        print(r"data:", data)
         Can = False
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
@@ -187,7 +199,11 @@ def refresh():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         User = model.db_user.get(email=OldToken.email)
-        
+        if User.permission == 0:
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }), status=403, mimetype='application/json; charset=utf-8')
         TokenSelected = OldToken.bind
         if TokenSelected:
             TokenProfile = model.db_profile.get(uuid=TokenSelected)
@@ -231,12 +247,12 @@ def refresh():
                 TokenSelected = model.findprofilebyid(PostProfile['id']).uuid
                 Can = True
 
-        NewToken = model.db_token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=ClientToken, email=OldToken.email, bind=TokenSelected)
+        NewToken = model.db_token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, email=OldToken.email, bind=TokenSelected)
         NewToken.save()
         OldToken.delete_instance()
         IReturn = {
             "accessToken" : NewToken.accessToken,
-            'clientToken' : ClientToken,
+            'clientToken' : OldToken.clientToken,
             #'selectedProfile' : {}
         }
         if TokenProfile:
@@ -268,6 +284,13 @@ def validate():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
+            User = model.db_user.get(email=result.email)
+            if User.permission == 0:
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }), status=403, mimetype='application/json; charset=utf-8')
+
             if result.status in [2,1]:
                 error = {
                     'error' : "ForbiddenOperationException",
@@ -283,7 +306,6 @@ def invalidate():
         data = request.json
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if "clientToken" in data else None
-        #print("tesst:", data)
         try:
             if ClientToken == None:
                 try:
@@ -307,6 +329,12 @@ def invalidate():
                 #return Response(status=204)
             raise e
         else:
+            User = model.db_user.get(email=result.email)
+            if User.permission == 0:
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }), status=403, mimetype='application/json; charset=utf-8')
             result.delete_instance()
             return Response(status=204)
 
@@ -328,6 +356,11 @@ def signout():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
+            if result.permission == 0:
+                return Response(simplejson.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
                     model.db_token.delete().where(model.db_token.bind == result.selected).execute()
@@ -434,7 +467,6 @@ def searchprofile(getuuid):
     args = request.args
     signed = False
     IReturn = {}
-    print(args)
     if 'unsigned' in args:
         signed = True if args['unsigned'] == 'true' else False
         #signed = False if args['unsigned'] == 'false' else True
@@ -488,7 +520,6 @@ def searchprofile(getuuid):
 def searchmanyprofile():
     if request.is_json:
         data = list(set(list(request.json)))
-        print(request.json)
         IReturn = list()
         for i in range(config.ProfileSearch.MaxAmount - 1):
             try:
@@ -496,7 +527,6 @@ def searchmanyprofile():
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
                     continue
-        print(IReturn)
         return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
     return Response(status=404)
 
@@ -648,6 +678,7 @@ def profileadd():
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
+
 #####################
 @app.route("/texture/<image>", methods=['GET'])
 def imageview(image):

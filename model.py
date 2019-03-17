@@ -25,6 +25,10 @@ class db_user(peewee.Model):
     passwordsalt = peewee.CharField()
     #playername = peewee.CharField()
     selected = peewee.CharField(null=True)
+    permission = peewee.CharField(default=1)
+    # 1 => 正常
+    # 2 => 管理员
+    # 0 => 被封禁
 
     class Meta:
         database = db['global']
