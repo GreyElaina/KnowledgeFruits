@@ -74,7 +74,7 @@ def OutTime(token):
 
 def CheckTokenStatus():
     for i in model.db_token.select().where(model.db_token.status == 0 | model.db_token.status == 1):
-        OutTime(i)
+        OutTime(i)/
 
 def DeleteDisabledToken():
     # 删除失效Token(token.status == 2)
@@ -197,6 +197,13 @@ def refresh():
                 }
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
+        else:
+            if OldToken.status not in [0, 1]:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         User = model.db_user.get(email=OldToken.email)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
