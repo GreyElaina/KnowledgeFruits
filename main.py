@@ -20,14 +20,19 @@ import base64
 import os
 from urllib.parse import urlparse
 from datetime import timedelta
-import openid.server
+from authlib.client import OAuth2Session
 
 config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
+raw_config = simplejson.loads(open("./data/config.json").read())
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
 #app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
+OAuth = {}
+for i in raw_config['OAuth'].keys():
+    OAuth[i] = OAuth2Session(name=i, **raw_config['OAuth'][i])
+
 class FlaskConfig(object):
     JOBS = [
         {
@@ -73,13 +78,7 @@ def CheckTokenStatus():
 
 def DeleteDisabledToken():
     # 删除失效Token(token.status == 2)
-    # 删除被封禁用户的所有Token(user.permission == 0)
     model.db_token.delete().where(model.db_token.status == 2).execute()
-    try:
-        for i in model.db_user.select().where(model.db_user.permission == 0):
-            model.db_token.delete().where(model.db_token.email == i.email)
-    except:
-        pass
 
 def ChangeItemStatus():
     for i in model.ms_serverjoin.select().where(model.ms_serverjoin.Out_timed == False):
@@ -129,11 +128,11 @@ def authenticate():
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        if user.permission == 0:
+        '''if user.permission == 0:
             return Response(simplejson.dumps({
                 'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }), status=403, mimetype='application/json; charset=utf-8')
+                'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+            }), status=403, mimetype='application/json; charset=utf-8')'''
 
         SelectedProfile = {}
         AvailableProfiles = []
@@ -199,11 +198,11 @@ def refresh():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         User = model.db_user.get(email=OldToken.email)
-        if User.permission == 0:
+        '''if User.permission == 0:
             return Response(simplejson.dumps({
                 'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }), status=403, mimetype='application/json; charset=utf-8')
+                'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+            }), status=403, mimetype='application/json; charset=utf-8')'''
         TokenSelected = OldToken.bind
         if TokenSelected:
             TokenProfile = model.db_profile.get(uuid=TokenSelected)
@@ -285,11 +284,11 @@ def validate():
             raise e
         else:
             User = model.db_user.get(email=result.email)
-            if User.permission == 0:
+            '''if User.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }), status=403, mimetype='application/json; charset=utf-8')
+                    'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+                }), status=403, mimetype='application/json; charset=utf-8')'''
 
             if result.status in [2,1]:
                 error = {
@@ -330,11 +329,11 @@ def invalidate():
             raise e
         else:
             User = model.db_user.get(email=result.email)
-            if User.permission == 0:
+            '''if User.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }), status=403, mimetype='application/json; charset=utf-8')
+                    'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+                }), status=403, mimetype='application/json; charset=utf-8')'''
             result.delete_instance()
             return Response(status=204)
 
@@ -356,11 +355,11 @@ def signout():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
-            if result.permission == 0:
+            '''if result.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
-                }), status=403, mimetype='application/json; charset=utf-8')
+                }), status=403, mimetype='application/json; charset=utf-8')'''
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
                     model.db_token.delete().where(model.db_token.bind == result.selected).execute()
@@ -678,6 +677,37 @@ def profileadd():
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
+
+@app.route('/api/knowledgefruits/oauth/<way>')
+def authorized(way):
+    # check to make sure the user authorized the request
+    if 'code' not in request.args:
+        error = {
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid credentials. Invalid username or password."
+        }
+        return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+ 
+    # make a request for the access token credentials using code
+    redirect_uri = url_for('authorized', _external=True)
+ 
+    data = {
+        "code": request.args['code'],
+        "redirect_uri": redirect_uri,
+        "scope": 'read_stream'
+    }
+ 
+    auth = OAuth[way].get_auth_session(data=data)
+ 
+    # the "me" response
+    me = auth.get('user').json()
+ 
+    user = User.get_or_create(me['login'], me['name'])
+ 
+    session['token'] = auth.access_token
+    session['user_id'] = user.id
+
+    return redirect(url_for('index'))
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])
