@@ -25,10 +25,6 @@ class db_user(peewee.Model):
     passwordsalt = peewee.CharField()
     #playername = peewee.CharField()
     selected = peewee.CharField(null=True)
-    permission = peewee.CharField(default=1)
-    # 1 => 正常
-    # 2 => 管理员
-    # 0 => 被封禁
 
     class Meta:
         database = db['global']
@@ -48,9 +44,7 @@ class db_profile(peewee.Model):
     format_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
     uuid = peewee.CharField(max_length=32)
     name = peewee.CharField()
-    type = peewee.CharField(default='SKIN')
-    model = peewee.CharField(default='STEVE')
-    hash = peewee.CharField(null=True)
+    texture = peewee.CharField()
     time = peewee.CharField(default=str(int(time.time())))
     createby = peewee.CharField() # 谁创建的角色?  邮箱
     ismain = peewee.BooleanField(default=True)
@@ -65,14 +59,28 @@ class ms_serverjoin(peewee.Model):
     ServerID = peewee.CharField()
     RemoteIP = peewee.CharField(16, default='0.0.0.0')
     time = peewee.CharField(default=time.time())
-    Out_timed = peewee.BooleanField(default=False)
-
     class Meta:
         database = db['cache']
 
 class textures(peewee.Model):
     userid = peewee.CharField(32)
+    textureid = peewee.CharField(default=str(uuid.uuid4()))
     photoname = peewee.CharField()
+    height = peewee.IntegerField(default=32)
+    width = peewee.IntegerField(default=64)
+    type = peewee.CharField(default='SKIN')
+    model = peewee.CharField(default='STEVE')
+    hash = peewee.CharField()
+    
+    class Meta:
+        database = db['global']
+
+class banner(peewee.Model):
+    email = peewee.CharField()
+    accessToken = peewee.CharField(max_length=32, null=True)
+    profileuuid = peewee.CharField()
+    inittime = peewee.TimestampField(default=int(time.time())) # time.mktime(datetime.now().timetuple())
+    timeout = peewee.TimestampField()
     class Meta:
         database = db['global']
 
@@ -233,8 +241,6 @@ def NewUser(email, passwd):
         passwordsalt=salt
     ).save()
 
-db['cache'].create_tables([ms_serverjoin])
-
 if __name__ == '__main__':
     #NewUser("test@gmail.com", "asd123456")
     #NewUser("test3@to2mbn.org", "asd123456")
@@ -243,3 +249,4 @@ if __name__ == '__main__':
     print(db_token.create_table())
     #print(db['global'].connect())
     #print(dbinfo['attr']['database'])
+    db['global'].create_tables([banner])

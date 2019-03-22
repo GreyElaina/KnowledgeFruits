@@ -18,9 +18,10 @@ from werkzeug.contrib.fixers import LighttpdCGIRootFix
 import pydblite
 import base64
 import os
-from urllib.parse import urlparse
+from urllib.parse import urlparse, parse_qs
 from datetime import timedelta
 from authlib.client import OAuth2Session
+import requests
 
 config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 raw_config = simplejson.loads(open("./data/config.json").read())
@@ -29,9 +30,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
 #app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
-OAuth = {}
-for i in raw_config['OAuth'].keys():
-    OAuth[i] = OAuth2Session(name=i, **raw_config['OAuth'][i])
+OAuth_Github = OAuth2Session(**config.OAuth.github)
 
 class FlaskConfig(object):
     JOBS = [
@@ -74,7 +73,7 @@ def OutTime(token):
 
 def CheckTokenStatus():
     for i in model.db_token.select().where(model.db_token.status == 0 | model.db_token.status == 1):
-        OutTime(i)/
+        OutTime(i)
 
 def DeleteDisabledToken():
     # 删除失效Token(token.status == 2)
@@ -685,36 +684,39 @@ def profileadd():
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
 
-@app.route('/api/knowledgefruits/oauth/<way>')
-def authorized(way):
-    # check to make sure the user authorized the request
-    if 'code' not in request.args:
+@app.route("/api/knowledgefruits/oauth/github/resource")
+def github_resource():
+    
+
+@app.route('/api/knowledgefruits/oauth/github/callback')
+def authorized():
+    code = request.args.get("code")
+    if not code:
         error = {
             'error' : "ForbiddenOperationException",
             'errorMessage' : "Invalid credentials. Invalid username or password."
         }
         return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
  
-    # make a request for the access token credentials using code
-    redirect_uri = url_for('authorized', _external=True)
- 
-    data = {
-        "code": request.args['code'],
-        "redirect_uri": redirect_uri,
-        "scope": 'read_stream'
-    }
- 
-    auth = OAuth[way].get_auth_session(data=data)
- 
-    # the "me" response
-    me = auth.get('user').json()
- 
-    user = User.get_or_create(me['login'], me['name'])
- 
-    session['token'] = auth.access_token
-    session['user_id'] = user.id
+    r = requests.get(config.OAuth.github.access_token_url, params={
+        "client_id": config.OAuth.github.client_id,
+        "client_secret": config.OAuth.github.client_secret,
+        "code": code
+    }).text
+    data = parse_qs(r)
+    accessToken = data['access_token'][0]
+    r = requests.get(config.OAuth.github.user, params={
+        "access_token": accessToken
+    }).json
+    if not r.get("email"):
+        return Response(simplejson.dumps({
+            "error": "UnpublicInformation",
+            "errorMessage": "https://github.com/settings/emails, Keep my email address private, Down it."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    email = r.get("email")
+    face = r.get("avatar_url")
+    return Response(status=204)
 
-    return redirect(url_for('index'))
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])
