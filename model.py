@@ -17,9 +17,8 @@ config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 
 db = {}
 db['global'] = peewee.__dict__[config.database.type](config.database.connect_info.global_db, **config.database.globalinfo)
-db['cache'] = peewee.__dict__[config.database.type](config.database.connect_info.cache, **config.database.globalinfo)
 class db_user(peewee.Model):
-    uuid = peewee.CharField(default=str(uuid.uuid4()))
+    uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
     email = peewee.CharField()
     password = peewee.CharField()
     passwordsalt = peewee.CharField()
@@ -44,37 +43,23 @@ class db_profile(peewee.Model):
     format_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
     uuid = peewee.CharField(max_length=32)
     name = peewee.CharField()
-    #texture = peewee.CharField()
-    type = peewee.CharField(default='SKIN')
-    model = peewee.CharField(default='STEVE')
-    hash = peewee.CharField()
+    skin = peewee.CharField(null=True)
+    cape = peewee.CharField(null=True)
     time = peewee.CharField(default=str(int(time.time())))
     createby = peewee.CharField() # 谁创建的角色?  邮箱
-    ismain = peewee.BooleanField(default=True)
-    #beselected = peewee.BooleanField(default=False)
-
     class Meta:
         database = db['global']
 
-class ms_serverjoin(peewee.Model):
-    AccessToken = peewee.CharField(32)
-    SelectedProfile = peewee.CharField()
-    ServerID = peewee.CharField()
-    RemoteIP = peewee.CharField(16, default='0.0.0.0')
-    time = peewee.CharField(default=time.time())
-    class Meta:
-        database = db['cache']
-
 class textures(peewee.Model):
-    userid = peewee.CharField(32)
-    textureid = peewee.CharField(default=str(uuid.uuid4()))
+    userid = peewee.CharField(32) # 标识上传者
+    textureid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
     photoname = peewee.CharField()
     height = peewee.IntegerField(default=32)
     width = peewee.IntegerField(default=64)
     type = peewee.CharField(default='SKIN')
     model = peewee.CharField(default='STEVE')
     hash = peewee.CharField()
-    
+
     class Meta:
         database = db['global']
 
@@ -88,36 +73,59 @@ class banner(peewee.Model):
     class Meta:
         database = db['global']
 '''
-def CreateProfile(profile, pngname):
-    OfflineUUID = base.OfflinePlayerUUID(profile.name)
-    Name = profile.name
-    hashvalue = base.PngBinHash(config.TexturePath + pngname)
-    db = db_profile(uuid=OfflineUUID, name=Name, hash=hashvalue)
-    db.save()
-    os.rename(config.TexturePath + pngname, config.TexturePath + hashvalue + ".png")
 
 def format_texture(profile, unMetaData=False):
     OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
     db_data = db_profile.get(uuid=OfflineUUID)
-    db_datas = db_profile.select().where(db_profile.uuid==OfflineUUID)
+    try:
+        db_data_skin = textures.select().where(textures.textureid==profile.skin)
+    except Exception as e:
+        if "texturesDoesNotExist" == e.__class__.__name__:
+            db_data_skin = {}
+    try:
+        db_data_cape = textures.select().where(textures.textureid==profile.cape)
+    except Exception as e:
+        if "texturesDoesNotExist" == e.__class__.__name__:
+            db_data_cape = {}
     #print(type(db_data.time))
     IReturn = {
         "timestamp" : round(float(db_data.time)),
         'profileId' : db_data.format_id,
         'profileName' : db_data.name,
-        'textures' : {
+        'textures' : {}
+    }
+    if db_data_skin:
+        IReturn['textures'].update({
             i.type : {
                 "url" : config.HostUrl + "/texture/" + i.hash,
                 "metadata" : {
                     'model' : {"STEVE": 'default', "ALEX": 'slim'}[i.model]
-                } if i.type == 'SKIN' else {}
-            } for i in db_datas
-        }
-    }
+                }
+            } for i in db_data_skin
+        })
+    if db_data_cape:
+        IReturn['textures'].update({
+            i.type : {
+                "url" : config.HostUrl + "/texture/" + i.hash,
+                "metadata" : {}
+            } for i in db_data_cape
+        })
     if unMetaData:
         for i in IReturn['textures'].keys():
             del IReturn['textures'][i]["metadata"]
     return IReturn
+
+def getskintype_profile(profile):
+    if not profile.skin:
+        return False
+    texture = textures.get(textures.textureid == profile.skin)
+    return texture.type
+
+def getskinmodel_profile(profile):
+    if not profile.skin:
+        return False
+    texture = textures.get(textures.textureid == profile.skin)
+    return texture.model
 
 def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, BetterData=False):
     def sign_self(data, key_file):
@@ -125,7 +133,7 @@ def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, 
         key = rsa.PrivateKey.load_pkcs1(key_file.encode('utf-8'))
         return bytes(base64.b64encode(rsa.sign(data.encode("utf-8"), key, 'SHA-1'))).decode("utf-8")
     if BetterData:
-        if not [True, False][profile.type == "SKIN" and profile.model == "ALEX"]:
+        if not [True, False][getskintype_profile(profile) == "SKIN" and getskinmodel_profile(profile) == "ALEX"]:
             unMetaData = False
         else:
             unMetaData = True
@@ -245,11 +253,61 @@ def NewUser(email, passwd):
         passwordsalt=salt
     ).save()
 
+def CreateProfile(name, createby, SKIN=None, CAPE=None):
+    OfflineUUID = base.OfflinePlayerUUID(name).replace("-", "")
+    db = db_profile(uuid=OfflineUUID, name=name, createby=createby, skin=SKIN, cape=CAPE)
+    db.save()
+
+def NewTexture(name, user, photoname, Type="SKIN", model="STEVE"):
+    data = textures(userid=user.uuid, photoname=photoname, type=Type, model=model, hash=base.PngBinHash(name))
+    data.save()
+    return data.textureid
+
 if __name__ == '__main__':
+    db['global'].create_tables([db_profile, db_token, db_user, textures])
     #NewUser("test@gmail.com", "asd123456")
+    #NewUser("1846913566@qq.com", "asd123456")
     #NewUser("test3@to2mbn.org", "asd123456")
-    #NewProfile("testplayer", db_user.get(email='test3@to2mbn.org'), "490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png", Model='ALEX')
-    #NewProfile("testplayer1", db_user.get(email='test3@to2mbn.org'), "1cd0db978f11733c4d6480fff46dd3530518e82eee23eb1ecb568550a35553ad.png", Type='CAPE')
-    print(db_token.create_table())
-    #print(db['global'].connect())
-    #print(dbinfo['attr']['database'])
+    '''
+    Chenwe_i_lin_skin = NewTexture(
+        "./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",
+        db_user.get(db_user.email == "1846913566@qq.com"),
+        photoname="Chenwe_i_lin-skin"
+    )
+    Chenwe_i_lin_cape = NewTexture(
+        "./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",
+        db_user.get(db_user.email == "1846913566@qq.com"),
+        photoname="Chenwe_i_lin-cape",
+        Type="CAPE"
+    )
+    testplayer_skin = NewTexture(
+        "./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",
+        db_user.get(db_user.email == "test3@to2mbn.org"),
+        photoname="testplayer-skin",
+        model="ALEX"
+    )
+    testplayer3_cape = NewTexture(
+        "./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png",
+        db_user.get(db_user.email == "test3@to2mbn.org"),
+        photoname="testplayer3-cape",
+        Type="CAPE"
+    )
+    
+    CreateProfile(
+        "Chenwe_i_lin",
+        "1846913566@qq.com",
+        SKIN="74da44e9a1404ab79312dbc89b51a9f0",
+        CAPE="11fdd8a1db50406a894f0a3a08295bd7"
+    )
+    ''''''
+    CreateProfile(
+        "testplayer",
+        "test3@to2mbn.org",
+        SKIN="dce9f17b2e8045febb75d80020bbfd53"
+    )
+    '''
+    CreateProfile(
+        "testplayer1",
+        "test3@to2mbn.org",
+        CAPE="092fc3923f1144239a4183b34d1dc082"
+    )

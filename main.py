@@ -144,7 +144,7 @@ def authenticate():
             Token.save() # 颁发Token
             try:
                 AvailableProfiles = [
-                    model.format_profile(i, unsigned=True) for i in model.db_profile.select().where((model.db_profile.createby==user.email) & (model.db_profile.ismain==True))
+                    model.format_profile(i, unsigned=True) for i in model.db_profile.select().where(model.db_profile.createby==user.email)
                 ]
             except Exception as e:
                 if "db_tokenDoesNotExist" == e.__class__.__name__:
@@ -502,7 +502,7 @@ def searchprofile(getuuid):
                     result,
                     Properties=True,
                     unsigned=False,
-                    unMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                    unMetaData=[True, False][model.getskintype_profile(result) == "SKIN" and model.getskinmodel_profile(result) == "ALEX"]
                 )
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
@@ -517,7 +517,7 @@ def searchprofile(getuuid):
                     result,
                     Properties=True,
                     unsigned=True,
-                    unMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                    unMetaData=[True, False][model.getskintype_profile(result) == "SKIN" and model.getskinmodel_profile(result) == "ALEX"]
                 )
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
@@ -532,7 +532,7 @@ def searchprofile(getuuid):
                 result,
                 Properties=True,
                 unsigned=True,
-                unMetaData=[True, False][result.type == "SKIN" and result.model == "ALEX"]
+                unMetaData=[True, False][model.getskintype_profile(result) == "SKIN" and model.getskinmodel_profile(result) == "ALEX"]
             )
         except Exception as e:
             if "DoesNotExist" in e.__class__.__name__:
@@ -547,7 +547,7 @@ def searchmanyprofile():
         IReturn = list()
         for i in range(config.ProfileSearch.MaxAmount - 1):
             try:
-                IReturn.append(model.format_profile(model.db_profile.select().where((model.db_profile.name==data[i]) & (model.db_profile.ismain == True)).get(), unsigned=True))
+                IReturn.append(model.format_profile(model.db_profile.select().where(model.db_profile.name==data[i]).get(), unsigned=True))
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
                     continue
@@ -582,13 +582,14 @@ def kf_login_randomkey():
                 "username" : user_result.email,
                 "salt" : salt
             }
-            cache[authid] = {
+            cache_redis.hmset(authid, {
                 "HashKey" : Randomkey,
                 "username" : user_result.email,
                 "salt" : salt,
                 "VerifyValue" : user_result.password,
                 "authId" : authid
-            }
+            })
+            cache_redis.expire(authid, 30)
             return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
         else:
             return Response(status=403)
@@ -597,33 +598,32 @@ def kf_login_randomkey():
 def kf_login_verify():
     if request.is_json:
         data = request.json
-        try:
-            cache_result = cache[data['authId']]
-        except KeyError:
+        Data = cache_redis.hgetall(data['authId'])
+        Data = {i.decode(): Data[i].decode() for i in Data.keys()}
+        if not Data:
             return Response(status=403)
         else:
-            user_result = model.getuser(cache_result['username']).get()
+            user_result = model.getuser(Data['username']).get()
             if user_result:
-                AuthRequest = password.crypt(user_result.password, cache_result['HashKey'])
+                AuthRequest = password.crypt(user_result.password, Data['HashKey'])
                 if AuthRequest == data['Password']:
                     Token = model.db_token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user_result.email)
                     Token.save() # 颁发Token
-
                     IReturn = {
                         "accessToken" : Token.accessToken,
                         "clientToken" : Token.clientToken
                     }
-                    del cache[data['authId']]
+                    cache_redis.delete(data['authId'])
                     return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
                 else:
+                    cache_redis.delete(data['authId'])
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Invalid credentials. Invalid username or password."
                     }
-                    del cache[data['authId']]
                     return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
-                del cache[data['authId']]
+                cache_redis.delete(data['authId'])
                 return Response(status=403)
             
 @app.route("/api/knowledgefruits/user/changepassword/<username>", methods=['POST'])
@@ -702,11 +702,22 @@ def profileadd():
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
-'''
+
 @app.route("/api/knowledgefruits/oauth/github/resource")
 def github_resource():
-    
-'''
+    code = request.args.get("code")
+    if not code:
+        error = {
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid credentials. Invalid username or password."
+        }
+        return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+    Data = cache_redis.hgetall(".".join(["OAuth", "github", "response", code]))
+    Data = {i.decode(): Data[i].decode() for i in Data.keys()}
+    if not Data:
+        return Response(status=404)
+    return Response(simplejson.dumps(Data), mimetype='application/json; charset=utf-8')
+
 @app.route('/api/knowledgefruits/oauth/github/callback')
 def authorized():
     code = request.args.get("code")
@@ -734,7 +745,11 @@ def authorized():
         email = requests.get(config.OAuth.github.email, params={
             "token": accessToken
         }).json[0].get('email')
-    
+    cache_redis.hmset(".".join(["OAuth", "github", "response", code]), {
+        "email": email,
+        "face": face,
+        "name": r.get("login")
+    })
     return Response(status=204)
 
 #####################
@@ -761,8 +776,7 @@ if __name__ == '__main__':
     # Drop Cache Table
     #model.ms_serverjoin.delete().execute()
     if FileExists('./data/global.db'):
-        model.db['global'].create_tables([model.db_profile, model.db_token, model.db_user])
-        model.db['global'].create_tables([model.ms_serverjoin])
+        model.db['global'].create_tables([model.db_profile, model.db_token, model.db_user, model.textures])
     if False in [FileExists(config.KeyPath.Private), FileExists(config.KeyPath.Public)]:
         import rsa
         (public, private) = rsa.newkeys(2048)
