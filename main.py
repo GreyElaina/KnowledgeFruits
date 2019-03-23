@@ -668,41 +668,6 @@ def kf_user_changepasswd(username):
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
 
-@app.route('/api/knowledgefruits/profile/add', methods=['POST'])
-def profileadd():
-    if request.is_json:
-        data = request.json
-        AccessToken = data['accessToken']
-        ClientToken = data.get("clientToken")
-        if not ClientToken:
-            token_result_boolean = model.is_validate(AccessToken)
-            token = model.gettoken(AccessToken)
-        else:
-            token_result_boolean = model.is_validate(AccessToken, ClientToken)
-            token = model.gettoken(AccessToken, ClientToken)
-        if token_result_boolean:
-            #Token有效
-            Email = token.email
-            if re.match(base.StitchExpression(config.reMatch.PlayerName), data.get("PlayerName")):
-                PlayerName = data.get(PlayerName)
-                result = model.db_profile(
-                    uuid=base.OfflinePlayerUUID(PlayerName).replace("-", ""),
-                    name=PlayerName,
-                    createby=Email
-                )
-                result.save()
-                return Response(status=204)
-            else:
-                return Response(simplejson.dumps({
-                    'error' : "ForbiddenOperationException",
-                    "errorMessage" : "Invalid token."
-                }), status=403, mimetype="application/json; charset=utf-8")
-        else:
-            return Response(simplejson.dumps({
-                'error' : "ForbiddenOperationException",
-                "errorMessage" : "Invalid token."
-            }), status=403, mimetype="application/json; charset=utf-8")
-
 @app.route("/api/knowledgefruits/oauth/github/resource")
 def github_resource():
     code = request.args.get("code")
