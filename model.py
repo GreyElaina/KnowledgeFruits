@@ -17,7 +17,7 @@ config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 
 db = {}
 db['global'] = peewee.__dict__[config.database.type](config.database.connect_info.global_db, **config.database.globalinfo)
-class db_user(peewee.Model):
+class user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
     email = peewee.CharField()
     password = peewee.CharField()
@@ -28,7 +28,7 @@ class db_user(peewee.Model):
     class Meta:
         database = db['global']
 
-class db_token(peewee.Model):
+class token(peewee.Model):
     accessToken = peewee.CharField()
     clientToken = peewee.CharField()
     status = peewee.CharField(default=0)
@@ -39,7 +39,7 @@ class db_token(peewee.Model):
     class Meta:
         database = db['global']
 
-class db_profile(peewee.Model):
+class profile(peewee.Model):
     format_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
     uuid = peewee.CharField(max_length=32)
     name = peewee.CharField()

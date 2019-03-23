@@ -73,12 +73,12 @@ def OutTime(token):
     # 2:已经失效,无法执行任何操作
 
 def CheckTokenStatus():
-    for i in model.db_token.select().where(model.db_token.status == 0 | model.db_token.status == 1):
+    for i in model.token.select().where(model.token.status == 0 | model.token.status == 1):
         OutTime(i)
 
 def DeleteDisabledToken():
     # 删除失效Token(token.status == 2)
-    model.db_token.delete().where(model.db_token.status == 2).execute()
+    model.token.delete().where(model.token.status == 2).execute()
 
 app.config.from_object(FlaskConfig())
 crontab = APScheduler()
@@ -110,7 +110,7 @@ def authenticate():
     if request.is_json:
         data = request.json
         try:
-            user = model.db_user.get(model.db_user.email==data['username'])
+            user = model.user.get(model.user.email==data['username'])
         except Exception as e:
             if "db_userDoesNotExist" == e.__class__.__name__:
                 error = {
@@ -140,11 +140,11 @@ def authenticate():
             ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
             AccessToken = str(uuid.uuid4()).replace("-","")
             
-            Token = model.db_token(accessToken=AccessToken, clientToken=ClientToken, bind=user.selected, email=user.email)
+            Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=user.selected, email=user.email)
             Token.save() # 颁发Token
             try:
                 AvailableProfiles = [
-                    model.format_profile(i, unsigned=True) for i in model.db_profile.select().where(model.db_profile.createby==user.email)
+                    model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==user.email)
                 ]
             except Exception as e:
                 if "db_tokenDoesNotExist" == e.__class__.__name__:
@@ -152,7 +152,7 @@ def authenticate():
                 #raise e
 
             try:
-                SelectedProfile = model.format_profile(model.db_profile.get(uuid=user.selected), unsigned=True)
+                SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
             except Exception as e:
                 if "db_tokenDoesNotExist" == e.__class__.__name__:
                     SelectedProfile = {}
@@ -186,9 +186,9 @@ def refresh():
         ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
         try:
             if 'clientToken' in data:
-                OldToken = model.db_token.get(accessToken=AccessToken, clientToken=ClientToken)
+                OldToken = model.token.get(accessToken=AccessToken, clientToken=ClientToken)
             else:
-                OldToken = model.db_token.get(accessToken=AccessToken)
+                OldToken = model.token.get(accessToken=AccessToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
                 error = {
@@ -204,7 +204,7 @@ def refresh():
                 'errorMessage' : "Invalid token."
             }
             return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        User = model.db_user.get(email=OldToken.email)
+        User = model.user.get(email=OldToken.email)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
                 'error' : "ForbiddenOperationException",
@@ -212,14 +212,14 @@ def refresh():
             }), status=403, mimetype='application/json; charset=utf-8')'''
         TokenSelected = OldToken.bind
         if TokenSelected:
-            TokenProfile = model.db_profile.get(uuid=TokenSelected)
+            TokenProfile = model.profile.get(uuid=TokenSelected)
         else:
             TokenProfile = {}
         if 'selectedProfile' in data:
             PostProfile = data['selectedProfile']
             # 验证客户端提供的角色信息
             try:
-                needuser = model.db_profile.get(format_id=PostProfile['id'], name=PostProfile['name'])
+                needuser = model.profile.get(format_id=PostProfile['id'], name=PostProfile['name'])
             except Exception as e:
                 if "db_profileDoesNotExist" == e.__class__.__name__:
                     error = {
@@ -253,7 +253,7 @@ def refresh():
                 TokenSelected = model.findprofilebyid(PostProfile['id']).uuid
                 Can = True
 
-        NewToken = model.db_token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, email=OldToken.email, bind=TokenSelected)
+        NewToken = model.token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, email=OldToken.email, bind=TokenSelected)
         NewToken.save()
         OldToken.delete_instance()
         IReturn = {
@@ -278,9 +278,9 @@ def validate():
         ClientToken = data['clientToken'] if "clientToken" in data else None
         try:
             if not ClientToken:
-                result = model.db_token.get(model.db_token.accessToken == AccessToken)
+                result = model.token.get(model.token.accessToken == AccessToken)
             else:
-                result = model.db_token.get(model.db_token.accessToken == AccessToken, model.db_token.clientToken == ClientToken)
+                result = model.token.get(model.token.accessToken == AccessToken, model.token.clientToken == ClientToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
                 error = {
@@ -290,7 +290,7 @@ def validate():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
-            User = model.db_user.get(email=result.email)
+            User = model.user.get(email=result.email)
             '''if User.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
@@ -315,16 +315,16 @@ def invalidate():
         try:
             if ClientToken == None:
                 try:
-                    result = model.db_token.get(model.db_token.accessToken == AccessToken)
+                    result = model.token.get(model.token.accessToken == AccessToken)
                 except Exception as e:
                     if "db_tokenDoesNotExist" == e.__class__.__name__:
                         return Response(status=204)
             else:
                 try:
-                    result = model.db_token.get(model.db_token.accessToken == AccessToken & model.db_token.clientToken == ClientToken)
+                    result = model.token.get(model.token.accessToken == AccessToken & model.token.clientToken == ClientToken)
                 except Exception as e:
                     if "db_tokenDoesNotExist" == e.__class__.__name__:
-                        result = model.db_token.get(model.db_token.accessToken == AccessToken)
+                        result = model.token.get(model.token.accessToken == AccessToken)
         except Exception as e:
             if "db_tokenDoesNotExist" == e.__class__.__name__:
                 error = {
@@ -335,7 +335,7 @@ def invalidate():
                 #return Response(status=204)
             raise e
         else:
-            User = model.db_user.get(email=result.email)
+            User = model.user.get(email=result.email)
             '''if User.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
@@ -352,7 +352,7 @@ def signout():
         email = data['username']
         passwd = data['password']
         try:
-            result = model.db_user.get(model.db_user.email == email)
+            result = model.user.get(model.user.email == email)
         except Exception as e:
             if "db_userDoesNotExist" == e.__class__.__name__:
                 error = {
@@ -378,7 +378,7 @@ def signout():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
-                    model.db_token.delete().where(model.db_token.bind == result.selected).execute()
+                    model.token.delete().where(model.token.bind == result.selected).execute()
                 except Exception as e:
                     if "db_userDoesNotExist" == e.__class__.__name__:
                         error = {
@@ -417,7 +417,7 @@ def joinserver():
             token = model.gettoken(AccessToken, ClientToken)
             if token.bind:
                 try:
-                    result = model.db_profile.get(uuid=token.bind)
+                    result = model.profile.get(uuid=token.bind)
                 except Exception as e:
                     if "db_profileDoesNotExist" == e.__class__.__name__:
                         return Response(status=404)
@@ -427,7 +427,7 @@ def joinserver():
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
-            playeruuid = model.db_profile.get(name=result.name).format_id.replace("-", "")
+            playeruuid = model.profile.get(name=result.name).format_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
                 #sj = model.ms_serverjoin(
                 #    AccessToken=AccessToken,
@@ -466,8 +466,8 @@ def PlayerHasJoined():
     if not Data:
         return Response(status=204)
     try:
-        TokenInfo = model.db_token.get(accessToken=Data['accessToken'])
-        ProfileInfo = model.db_profile.get(uuid=TokenInfo.bind, name=PlayerName)
+        TokenInfo = model.token.get(accessToken=Data['accessToken'])
+        ProfileInfo = model.profile.get(uuid=TokenInfo.bind, name=PlayerName)
     except Exception as e:
         if "DoesNotExist" in e.__class__.__name__:
             return Response(status=204)
@@ -496,9 +496,9 @@ def searchprofile(getuuid):
         #signed = False if args['unsigned'] == 'false' else True
         if args['unsigned'] == 'false':
             try:
-                result = model.db_profile.get(format_id=getuuid)
+                result = model.profile.get(format_id=getuuid)
                 IReturn = model.format_profile(
-                    #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
+                    #model.user.get(model.user.playername == model.profile.get(format_id=getuuid).name),
                     result,
                     Properties=True,
                     unsigned=False,
@@ -511,9 +511,9 @@ def searchprofile(getuuid):
             return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
         if args['unsigned'] == 'true':
             try:
-                result = model.db_profile.get(format_id=getuuid)
+                result = model.profile.get(format_id=getuuid)
                 IReturn = model.format_profile(
-                    #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
+                    #model.user.get(model.user.playername == model.profile.get(format_id=getuuid).name),
                     result,
                     Properties=True,
                     unsigned=True,
@@ -526,9 +526,9 @@ def searchprofile(getuuid):
             return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
     else:
         try:
-            result = model.db_profile.get(format_id=getuuid)
+            result = model.profile.get(format_id=getuuid)
             IReturn = model.format_profile(
-                #model.db_user.get(model.db_user.playername == model.db_profile.get(format_id=getuuid).name),
+                #model.user.get(model.user.playername == model.profile.get(format_id=getuuid).name),
                 result,
                 Properties=True,
                 unsigned=True,
@@ -547,7 +547,7 @@ def searchmanyprofile():
         IReturn = list()
         for i in range(config.ProfileSearch.MaxAmount - 1):
             try:
-                IReturn.append(model.format_profile(model.db_profile.select().where(model.db_profile.name==data[i]).get(), unsigned=True))
+                IReturn.append(model.format_profile(model.profile.select().where(model.profile.name==data[i]).get(), unsigned=True))
             except Exception as e:
                 if "DoesNotExist" in e.__class__.__name__:
                     continue
@@ -607,7 +607,7 @@ def kf_login_verify():
             if user_result:
                 AuthRequest = password.crypt(user_result.password, Data['HashKey'])
                 if AuthRequest == data['Password']:
-                    Token = model.db_token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user_result.email)
+                    Token = model.token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user_result.email)
                     Token.save() # 颁发Token
                     IReturn = {
                         "accessToken" : Token.accessToken,
@@ -655,7 +655,7 @@ def kf_user_changepasswd(username):
                 user.passwordsalt = newsalt
                 user.save()
                 #开始否决所有的Token
-                model.db_token.delete().where(model.db_token.email == user.email).execute()
+                model.token.delete().where(model.token.email == user.email).execute()
                 return Response(status=204)
             else:
                 return Response(simplejson.dumps({
@@ -741,7 +741,7 @@ if __name__ == '__main__':
     # Drop Cache Table
     #model.ms_serverjoin.delete().execute()
     if FileExists('./data/global.db'):
-        model.db['global'].create_tables([model.db_profile, model.db_token, model.db_user, model.textures])
+        model.db['global'].create_tables([model.profile, model.token, model.user, model.textures])
     if False in [FileExists(config.KeyPath.Private), FileExists(config.KeyPath.Public)]:
         import rsa
         (public, private) = rsa.newkeys(2048)
