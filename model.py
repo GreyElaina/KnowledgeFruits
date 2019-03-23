@@ -44,7 +44,10 @@ class db_profile(peewee.Model):
     format_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
     uuid = peewee.CharField(max_length=32)
     name = peewee.CharField()
-    texture = peewee.CharField()
+    #texture = peewee.CharField()
+    type = peewee.CharField(default='SKIN')
+    model = peewee.CharField(default='STEVE')
+    hash = peewee.CharField()
     time = peewee.CharField(default=str(int(time.time())))
     createby = peewee.CharField() # 谁创建的角色?  邮箱
     ismain = peewee.BooleanField(default=True)
@@ -75,6 +78,7 @@ class textures(peewee.Model):
     class Meta:
         database = db['global']
 
+'''
 class banner(peewee.Model):
     email = peewee.CharField()
     accessToken = peewee.CharField(max_length=32, null=True)
@@ -83,7 +87,7 @@ class banner(peewee.Model):
     timeout = peewee.TimestampField()
     class Meta:
         database = db['global']
-
+'''
 def CreateProfile(profile, pngname):
     OfflineUUID = base.OfflinePlayerUUID(profile.name)
     Name = profile.name
@@ -249,4 +253,3 @@ if __name__ == '__main__':
     print(db_token.create_table())
     #print(db['global'].connect())
     #print(dbinfo['attr']['database'])
-    db['global'].create_tables([banner])

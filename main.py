@@ -20,8 +20,8 @@ import base64
 import os
 from urllib.parse import urlparse, parse_qs
 from datetime import timedelta
-from authlib.client import OAuth2Session
 import requests
+import redis
 
 config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 raw_config = simplejson.loads(open("./data/config.json").read())
@@ -30,7 +30,7 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
 #app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
-OAuth_Github = OAuth2Session(**config.OAuth.github)
+cache_redis = redis.Redis(**raw_config['redis'])
 
 class FlaskConfig(object):
     JOBS = [
@@ -51,6 +51,7 @@ class FlaskConfig(object):
     ]
 
     SCHEDULER_API_ENABLED = True
+
 def OutTime(token):
     '''
     token.status = \
@@ -79,15 +80,6 @@ def DeleteDisabledToken():
     # 删除失效Token(token.status == 2)
     model.db_token.delete().where(model.db_token.status == 2).execute()
 
-def ChangeItemStatus():
-    for i in model.ms_serverjoin.select().where(model.ms_serverjoin.Out_timed == False):
-        if int(time.time()) - round(float(i.time)) >= config.Outtime:
-            i.Out_timed = True
-            i.save()
-
-def DeleteOuttimeItem():
-    model.ms_serverjoin.delete().where(model.ms_serverjoin.Out_timed == True).execute()
-
 app.config.from_object(FlaskConfig())
 crontab = APScheduler()
 crontab.init_app(app)
@@ -99,7 +91,6 @@ cache = {
 @app.errorhandler(429)
 def ratelimit_handler(e):
     return Response(status=403)
-
 
 @app.route(config.const.base + '/', methods=['GET'])
 def index():
@@ -132,6 +123,15 @@ def authenticate():
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
+        if not cache_redis.get(".".join(['lock', user.email])):
+            cache_redis.setnx(".".join(['lock', user.email]), "locked")
+            cache_redis.expire(".".join(['lock', user.email]), config.AuthLimit)
+        else:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
 
         SelectedProfile = {}
         AvailableProfiles = []
@@ -144,11 +144,12 @@ def authenticate():
             Token.save() # 颁发Token
             try:
                 AvailableProfiles = [
-                    model.format_profile(i, unsigned=True) for i in model.db_profile.select().where((model.db_profile.createby==user.email) & (model.db_profile.ismain==True)).group_by(model.db_profile.uuid)
+                    model.format_profile(i, unsigned=True) for i in model.db_profile.select().where((model.db_profile.createby==user.email) & (model.db_profile.ismain==True))
                 ]
             except Exception as e:
                 if "db_tokenDoesNotExist" == e.__class__.__name__:
                     AvailableProfiles = []
+                #raise e
 
             try:
                 SelectedProfile = model.format_profile(model.db_profile.get(uuid=user.selected), unsigned=True)
@@ -196,13 +197,13 @@ def refresh():
                 }
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
-        else:
-            if OldToken.status not in [0, 1]:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+
+        if OldToken.status not in ["0", "1"]:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }
+            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         User = model.db_user.get(email=OldToken.email)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
@@ -366,6 +367,15 @@ def signout():
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }), status=403, mimetype='application/json; charset=utf-8')'''
+            if not cache_redis.get(".".join(['lock', result.email])):
+                cache_redis.setnx(".".join(['lock', result.email]), "locked")
+                cache_redis.expire(".".join(['lock', result.email]), config.AuthLimit)
+            else:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
                     model.db_token.delete().where(model.db_token.bind == result.selected).execute()
@@ -419,13 +429,19 @@ def joinserver():
                 }), status=403, mimetype="application/json; charset=utf-8")
             playeruuid = model.db_profile.get(name=result.name).format_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
-                sj = model.ms_serverjoin(
-                    AccessToken=AccessToken,
-                    SelectedProfile=data['selectedProfile'],
-                    ServerID=data['serverId'],
-                    RemoteIP=request.remote_addr
-                )
-                sj.save()
+                #sj = model.ms_serverjoin(
+                #    AccessToken=AccessToken,
+                #    SelectedProfile=data['selectedProfile'],
+                #    ServerID=data['serverId'],
+                #    RemoteIP=request.remote_addr
+                #)
+                #sj.save()
+                cache_redis.hmset(data['serverId'], {
+                    "accessToken": AccessToken,
+                    "selectedProfile": data['selectedProfile'],
+                    "remoteIP": request.remote_addr
+                })
+                cache_redis.expire(data['serverId'], config.ServerIDOutTime)
                 return Response(status=204)
             else:
                 return Response(simplejson.dumps({
@@ -445,16 +461,19 @@ def PlayerHasJoined():
     PlayerName = args['username']
     RemoteIP = args['ip'] if 'ip' in args else None
     Successful = False
+    Data = cache_redis.hgetall(ServerID)
+    Data = {i.decode(): Data[i].decode() for i in Data.keys()}
+    if not Data:
+        return Response(status=204)
     try:
-        JoinInfo = model.ms_serverjoin.get(ServerID=ServerID)
-        TokenInfo = model.db_token.get(accessToken=JoinInfo.AccessToken)
+        TokenInfo = model.db_token.get(accessToken=Data['accessToken'])
         ProfileInfo = model.db_profile.get(uuid=TokenInfo.bind, name=PlayerName)
     except Exception as e:
         if "DoesNotExist" in e.__class__.__name__:
             return Response(status=204)
         raise e
 
-    Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == JoinInfo.RemoteIP][bool(RemoteIP)]
+    Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == Data['remoteIP']][bool(RemoteIP)]
     if Successful:
         result = simplejson.dumps(model.format_profile(
             ProfileInfo,
@@ -683,11 +702,11 @@ def profileadd():
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
-
+'''
 @app.route("/api/knowledgefruits/oauth/github/resource")
 def github_resource():
     
-
+'''
 @app.route('/api/knowledgefruits/oauth/github/callback')
 def authorized():
     code = request.args.get("code")
@@ -708,15 +727,15 @@ def authorized():
     r = requests.get(config.OAuth.github.user, params={
         "access_token": accessToken
     }).json
-    if not r.get("email"):
-        return Response(simplejson.dumps({
-            "error": "UnpublicInformation",
-            "errorMessage": "https://github.com/settings/emails, Keep my email address private, Down it."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    email = r.get("email")
     face = r.get("avatar_url")
+    if r.get("email"):
+        email = r.get("email")
+    else:
+        email = requests.get(config.OAuth.github.email, params={
+            "token": accessToken
+        }).json[0].get('email')
+    
     return Response(status=204)
-
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])
