@@ -72,7 +72,8 @@
             "email": "https://api.github.com/user/emails",
             "client_id": "cafc6b66d1a95033e6ad",
             "client_secret": "7c322f146ca7c4759c9fd900a930b35b7a65f1ad",
-            "scope": "user:email"
+            "scope": "user:email",
+            "icon": "github"
         }
     }
 }

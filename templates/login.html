@@ -1,0 +1,105 @@
+<html>
+<head>
+<meta name="theme-color" content="#ffffff" />
+<meta charset="utf-8" />
+<meta content="IE=edge,chrome=1" http-equiv="X-UA-Compatible" />
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=2, user-scalable=no" />
+<link rel="stylesheet" type="text/css" href="/static/semantic/semantic.min.css">
+<script src="/static/jquery/jquery-3.1.1.min.js"></script>
+<script src="/static/semantic/semantic.min.js"></script>
+<link rel="stylesheet" href="/static/font-awesome/font-awesome.css">
+<script src='/static/vuejs/vue.js'></script>
+<script src='/static/three.js/three.min.js'></script>
+<script src="/static/skinview3d/skinview3d.min.js"></script>
+<script src="/static/crypto-js/crypto-js.js"></script>
+<script src="/static/axios/axios.min.js"></script>
+<script src="/static/js-cookie/js.cookie.min.js"></script>
+</head>
+<body>
+        <div class="ui">
+                <div class="ui center raised very very padded container" style="margin-top: 14%;">
+                <div class="ui card centered raised" id="information">
+                    <div class="extra content">
+                            <div class="ui medium header center aligned">KnowledgeFruits Manager</div>
+                    </div>
+                    <div class="extra content">
+                        <div class="ui input icon fluid" :class='{"error": readyemailvalue}'>
+                            <input @input="readyemail($event)" style="margin-bottom: 2px;" type="text" v-model="email"/>
+                            <i class="envelope icon"></i>
+                        </div>
+                        <div class="ui input icon fluid" :class='{"error": truepasswd}'>
+                            <input @input="readypass($event)" style="margin-bottom: 2px;" type="password" v-model="passwd"/>
+                            <i class="key icon"></i>
+                        </div>
+                        <div class="ui checkbox" style="padding-top: 1.8%;">
+                            <input type="checkbox" v-model='rememberpasswd'>
+                            <label>记住密码</label>
+                        </div>
+                    </div>
+                    <div class="extra content">
+                        <div class="ui green button fluid">登录</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <script>
+                var app = new Vue({
+                    el: "#information",
+                    delimiters: ['{[', ']}'],
+                    data: {
+                        username: "",
+                        way: "",
+                        bio: "",
+                        head: "",
+                        email: "",
+                        truepasswd: false,
+                        readyemailvalue: false,
+                        passwd: "",
+                        rememberpasswd: false
+                    },
+                    methods: {
+                        upload: function(){
+                            function crypt(Message, Salt){
+                                return crypto.SHA256(Message + Salt);
+                            };
+                            let that = this
+                            axios.post("/api/knowledgefruits/login/randomkey"), {
+                                "username": email
+                            }.then(function(response){
+                                let authId = response.data.authId
+                                let HashKey = response.data.HashKey
+                                let salt = response.data.salt
+                                let crypted = crypt(crypt(password, salt), HashKey)
+                                axios.post("/api/knowledgefruits/login/randomkey/verify", {
+                                    authId: authId,
+                                    Password: crypted.toString()
+                                }).then(function(response){
+                                    Cookies.set('accessToken', response.data.accessToken, { expires: 3 });
+                                    Cookies.set('clientToken', response.data.clientToken, { expires: 3 });
+                                    window.location.href = "/api/knowledgefruits/manager/"
+                                })
+                            })
+                        },
+                        readypass: function(event){
+                            let passwdre = /^(?![0-9]+$)(?![a-zA-Z]+$)[0-9A-Za-z]{6,22}$/;
+                            if(!passwdre.test(this.passwd)){
+                                this.truepasswd = true;
+                            }else{
+                                this.truepasswd = false;
+                            }
+                        },
+                        readyemail: function(event){
+                            let passwdre = /^([a-zA-Z0-9]+[_|\_|\.]?)*[a-zA-Z0-9]+@([a-zA-Z0-9]+[_|\_|\.]?)*[a-zA-Z0-9]+\.[a-zA-Z]{2,3}$/;
+                            if(!passwdre.test(this.email)){
+                                this.readyemailvalue = true;
+                            }else{
+                                this.readyemailvalue = false;
+                            }
+                        }
+                    },
+                    mounted(){
+                        //console.log(this.$route.query);
+                    }
+                });
+            </script>
+</body>

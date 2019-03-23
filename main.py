@@ -109,15 +109,17 @@ def authenticate():
     IReturn = {}
     if request.is_json:
         data = request.json
+        user = {}
         try:
             user = model.user.get(model.user.email==data['username'])
         except Exception as e:
-            if "db_userDoesNotExist" == e.__class__.__name__:
+            if "userDoesNotExist" == e.__class__.__name__:
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise e
         '''if user.permission == 0:
             return Response(simplejson.dumps({
                 'error' : "ForbiddenOperationException",
@@ -147,14 +149,13 @@ def authenticate():
                     model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==user.email)
                 ]
             except Exception as e:
-                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                if "profileDoesNotExist" == e.__class__.__name__:
                     AvailableProfiles = []
-                #raise e
 
             try:
                 SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
             except Exception as e:
-                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                if "profileDoesNotExist" == e.__class__.__name__:
                     SelectedProfile = {}
 
             IReturn = {
@@ -190,7 +191,7 @@ def refresh():
             else:
                 OldToken = model.token.get(accessToken=AccessToken)
         except Exception as e:
-            if "db_tokenDoesNotExist" == e.__class__.__name__:
+            if "tokenDoesNotExist" == e.__class__.__name__:
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
@@ -221,7 +222,7 @@ def refresh():
             try:
                 needuser = model.profile.get(format_id=PostProfile['id'], name=PostProfile['name'])
             except Exception as e:
-                if "db_profileDoesNotExist" == e.__class__.__name__:
+                if "profileDoesNotExist" == e.__class__.__name__:
                     error = {
                         'error' : "IllegalArgumentException",
                         'errorMessage' : "Invalid token."
@@ -282,7 +283,7 @@ def validate():
             else:
                 result = model.token.get(model.token.accessToken == AccessToken, model.token.clientToken == ClientToken)
         except Exception as e:
-            if "db_tokenDoesNotExist" == e.__class__.__name__:
+            if "tokenDoesNotExist" == e.__class__.__name__:
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
@@ -317,16 +318,16 @@ def invalidate():
                 try:
                     result = model.token.get(model.token.accessToken == AccessToken)
                 except Exception as e:
-                    if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    if "tokenDoesNotExist" == e.__class__.__name__:
                         return Response(status=204)
             else:
                 try:
                     result = model.token.get(model.token.accessToken == AccessToken & model.token.clientToken == ClientToken)
                 except Exception as e:
-                    if "db_tokenDoesNotExist" == e.__class__.__name__:
+                    if "tokenDoesNotExist" == e.__class__.__name__:
                         result = model.token.get(model.token.accessToken == AccessToken)
         except Exception as e:
-            if "db_tokenDoesNotExist" == e.__class__.__name__:
+            if "tokenDoesNotExist" == e.__class__.__name__:
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
@@ -354,7 +355,7 @@ def signout():
         try:
             result = model.user.get(model.user.email == email)
         except Exception as e:
-            if "db_userDoesNotExist" == e.__class__.__name__:
+            if "userDoesNotExist" == e.__class__.__name__:
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
@@ -380,7 +381,7 @@ def signout():
                 try:
                     model.token.delete().where(model.token.bind == result.selected).execute()
                 except Exception as e:
-                    if "db_userDoesNotExist" == e.__class__.__name__:
+                    if "userDoesNotExist" == e.__class__.__name__:
                         error = {
                             'error' : "ForbiddenOperationException",
                             'errorMessage' : "Invalid credentials. Invalid username or password."
@@ -419,7 +420,7 @@ def joinserver():
                 try:
                     result = model.profile.get(uuid=token.bind)
                 except Exception as e:
-                    if "db_profileDoesNotExist" == e.__class__.__name__:
+                    if "profileDoesNotExist" == e.__class__.__name__:
                         return Response(status=404)
                     raise e
             else:
@@ -564,7 +565,14 @@ def serverinfo():
     return Response(simplejson.dumps({
         "Yggdrasil" : {
             "BaseUrl" : config.const.base
-        }
+        },
+        "OAuth": {
+            "github": {
+                "authorize_url": config.OAuth.github.authorize_url,
+                "icon": config.OAuth.github.icon
+            }
+        },
+        "TokenTime": raw_config['TokenTime']
     }), mimetype='application/json; charset=utf-8')
 
 @app.route("/api/knowledgefruits/login/randomkey", methods=['POST'])
@@ -671,14 +679,14 @@ def kf_user_changepasswd(username):
 @app.route("/api/knowledgefruits/oauth/github/resource")
 def github_resource():
     code = request.args.get("code")
+    print(request.args)
     if not code:
         error = {
             'error' : "ForbiddenOperationException",
             'errorMessage' : "Invalid credentials. Invalid username or password."
         }
         return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-    Data = cache_redis.hgetall(".".join(["OAuth", "github", "response", code]))
-    Data = {i.decode(): Data[i].decode() for i in Data.keys()}
+    Data = simplejson.loads(cache_redis.get(".".join(["OAuth", "github", "response", code])))
     if not Data:
         return Response(status=404)
     return Response(simplejson.dumps(Data), mimetype='application/json; charset=utf-8')
@@ -696,26 +704,39 @@ def authorized():
     r = requests.get(config.OAuth.github.access_token_url, params={
         "client_id": config.OAuth.github.client_id,
         "client_secret": config.OAuth.github.client_secret,
-        "code": code
+        "code": code,
+        "redirect_uri": "http://127.0.0.1:5001/api/knowledgefruits/oauth/github/callback"
     }).text
     data = parse_qs(r)
     accessToken = data['access_token'][0]
     r = requests.get(config.OAuth.github.user, params={
         "access_token": accessToken
-    }).json
-    face = r.get("avatar_url")
-    if r.get("email"):
+    }).json()
+    face = r.get("avatar_url", "")
+    if r.get("email") != None:
         email = r.get("email")
     else:
-        email = requests.get(config.OAuth.github.email, params={
-            "token": accessToken
-        }).json[0].get('email')
-    cache_redis.hmset(".".join(["OAuth", "github", "response", code]), {
+        result = requests.get(config.OAuth.github.email, params={
+            "access_token": accessToken,
+            "scope": "user:email"
+        }).json()
+        email = result[0].get("email", "")
+    cache_redis.set(".".join(["OAuth", "github", "response", code]), simplejson.dumps({
         "email": email,
         "face": face,
-        "name": r.get("login")
-    })
-    return Response(status=204)
+        "name": r.get("login", ""),
+        "bio": r.get("bio", ""),
+        "way": "Github"
+    }))
+    return redirect(url_for('register', code=code))
+
+@app.route('/api/knowledgefruits/register')
+def register():
+    return render_template("register.html")
+
+@app.route('/api/knowledgefruits/login')
+def login():
+    return render_template("login.html")
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])

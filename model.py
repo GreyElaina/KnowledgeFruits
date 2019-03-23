@@ -76,55 +76,55 @@ class banner(peewee.Model):
 
 def format_texture(profile, unMetaData=False):
     OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
-    db_data = db_profile.get(uuid=OfflineUUID)
+    data = profile.get(uuid=OfflineUUID)
     try:
-        db_data_skin = textures.select().where(textures.textureid==profile.skin)
+        data_skin = textures.select().where(textures.textureid==profile.skin)
     except Exception as e:
         if "texturesDoesNotExist" == e.__class__.__name__:
-            db_data_skin = {}
+            data_skin = {}
     try:
-        db_data_cape = textures.select().where(textures.textureid==profile.cape)
+        data_cape = textures.select().where(textures.textureid==profile.cape)
     except Exception as e:
         if "texturesDoesNotExist" == e.__class__.__name__:
-            db_data_cape = {}
-    #print(type(db_data.time))
+            data_cape = {}
+    #print(type(data.time))
     IReturn = {
-        "timestamp" : round(float(db_data.time)),
-        'profileId' : db_data.format_id,
-        'profileName' : db_data.name,
+        "timestamp" : round(float(data.time)),
+        'profileId' : data.format_id,
+        'profileName' : data.name,
         'textures' : {}
     }
-    if db_data_skin:
+    if data_skin:
         IReturn['textures'].update({
             i.type : {
                 "url" : config.HostUrl + "/texture/" + i.hash,
                 "metadata" : {
                     'model' : {"STEVE": 'default', "ALEX": 'slim'}[i.model]
                 }
-            } for i in db_data_skin
+            } for i in data_skin
         })
-    if db_data_cape:
+    if data_cape:
         IReturn['textures'].update({
             i.type : {
                 "url" : config.HostUrl + "/texture/" + i.hash,
                 "metadata" : {}
-            } for i in db_data_cape
+            } for i in data_cape
         })
     if unMetaData:
         for i in IReturn['textures'].keys():
             del IReturn['textures'][i]["metadata"]
     return IReturn
 
-def getskintype_profile(profile):
-    if not profile.skin:
+def getskintype_profile(iprofile):
+    if not iprofile.skin:
         return False
-    texture = textures.get(textures.textureid == profile.skin)
+    texture = textures.get(textures.textureid == iprofile.skin)
     return texture.type
 
-def getskinmodel_profile(profile):
-    if not profile.skin:
+def getskinmodel_profile(iprofile):
+    if not iprofile.skin:
         return False
-    texture = textures.get(textures.textureid == profile.skin)
+    texture = textures.get(textures.textureid == iprofile.skin)
     return texture.model
 
 def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, BetterData=False):
@@ -158,18 +158,18 @@ def is_validate(AccessToken, ClientToken=None):
     try:
         if not ClientToken:
             try:
-                result = db_token.get(db_token.accessToken == AccessToken)
+                result = token.get(token.accessToken == AccessToken)
             except Exception as e:
-                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                if "tokenDoesNotExist" == e.__class__.__name__:
                     return False
         else:
             try:
-                result = db_token.get(db_token.accessToken == AccessToken & db_token.clientToken == ClientToken)
+                result = token.get(token.accessToken == AccessToken & token.clientToken == ClientToken)
             except Exception as e:
-                if "db_tokenDoesNotExist" == e.__class__.__name__:
-                    result = db_token.get(db_token.accessToken == AccessToken)
+                if "tokenDoesNotExist" == e.__class__.__name__:
+                    result = token.get(token.accessToken == AccessToken)
     except Exception as e:
-        if "db_tokenDoesNotExist" == e.__class__.__name__:
+        if "tokenDoesNotExist" == e.__class__.__name__:
             return False
         raise e
     else:
@@ -182,18 +182,18 @@ def gettoken(AccessToken, ClientToken=None):
     try:
         if not ClientToken:
             try:
-                result = db_token.get(db_token.accessToken == AccessToken)
+                result = token.get(token.accessToken == AccessToken)
             except Exception as e:
-                if "db_tokenDoesNotExist" == e.__class__.__name__:
+                if "tokenDoesNotExist" == e.__class__.__name__:
                     return False
         else:
             try:
-                result = db_token.get(db_token.accessToken == AccessToken & db_token.clientToken == ClientToken)
+                result = token.get(token.accessToken == AccessToken & token.clientToken == ClientToken)
             except Exception as e:
-                if "db_tokenDoesNotExist" == e.__class__.__name__:
-                    result = db_token.get(db_token.accessToken == AccessToken)
+                if "tokenDoesNotExist" == e.__class__.__name__:
+                    result = token.get(token.accessToken == AccessToken)
     except Exception as e:
-        if "db_tokenDoesNotExist" == e.__class__.__name__:
+        if "tokenDoesNotExist" == e.__class__.__name__:
             return False
         raise e
     else:
@@ -204,9 +204,9 @@ def gettoken(AccessToken, ClientToken=None):
 
 def getprofile(name):
     try:
-        result = db_profile.select().where(db_profile.name == name)
+        result = profile.select().where(profile.name == name)
     except Exception as e:
-        if "db_profileDoesNotExist" == e.__class__.__name__:
+        if "profileDoesNotExist" == e.__class__.__name__:
             return False
         raise e
     else:
@@ -214,9 +214,9 @@ def getprofile(name):
 
 def getuser(email):
     try:
-        result = db_user.select().where(db_user.email == email)
+        result = user.select().where(user.email == email)
     except Exception as e:
-        if "db_userDoesNotExist" == e.__class__.__name__:
+        if "userDoesNotExist" == e.__class__.__name__:
             return False
         raise e
     else:
@@ -224,9 +224,9 @@ def getuser(email):
 
 def findprofilebyid(fid):
     try:
-        result = db_profile.select().where(db_profile.format_id == fid)
+        result = profile.select().where(profile.format_id == fid)
     except Exception as e:
-        if "db_profileDoesNotExist" == e.__class__.__name__:
+        if "profileDoesNotExist" == e.__class__.__name__:
             return False
         raise e
     else:
@@ -240,14 +240,14 @@ def format_user(user):
 
 def NewProfile(Playername, User, Png, Type='SKIN', Model="STEVE"):
     Email = User.email
-    db_p = db_profile(uuid=base.OfflinePlayerUUID(Playername).replace('-',''), name=Playername, hash=base.PngBinHash(config.texturepath + Png), createby=Email, type=Type, model=Model)
+    p = profile(uuid=base.OfflinePlayerUUID(Playername).replace('-',''), name=Playername, hash=base.PngBinHash(config.texturepath + Png), createby=Email, type=Type, model=Model)
     print(config.texturepath + Png)
     os.rename(config.texturepath + Png, config.texturepath + base.PngBinHash(config.texturepath + Png) + ".png")
-    db_p.save()
+    p.save()
 
 def NewUser(email, passwd):
     salt = base.CreateSalt(length=8)
-    db_user(
+    user(
         email=email,
         password=password.crypt(passwd, salt),
         passwordsalt=salt
@@ -255,7 +255,7 @@ def NewUser(email, passwd):
 
 def CreateProfile(name, createby, SKIN=None, CAPE=None):
     OfflineUUID = base.OfflinePlayerUUID(name).replace("-", "")
-    db = db_profile(uuid=OfflineUUID, name=name, createby=createby, skin=SKIN, cape=CAPE)
+    db = profile(uuid=OfflineUUID, name=name, createby=createby, skin=SKIN, cape=CAPE)
     db.save()
 
 def NewTexture(name, user, photoname, Type="SKIN", model="STEVE"):
@@ -264,50 +264,14 @@ def NewTexture(name, user, photoname, Type="SKIN", model="STEVE"):
     return data.textureid
 
 if __name__ == '__main__':
-    db['global'].create_tables([db_profile, db_token, db_user, textures])
+    #db['global'].create_tables([profile, token, user, textures])
     #NewUser("test@gmail.com", "asd123456")
     #NewUser("1846913566@qq.com", "asd123456")
     #NewUser("test3@to2mbn.org", "asd123456")
-    '''
-    Chenwe_i_lin_skin = NewTexture(
-        "./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",
-        db_user.get(db_user.email == "1846913566@qq.com"),
-        photoname="Chenwe_i_lin-skin"
-    )
-    Chenwe_i_lin_cape = NewTexture(
-        "./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",
-        db_user.get(db_user.email == "1846913566@qq.com"),
-        photoname="Chenwe_i_lin-cape",
-        Type="CAPE"
-    )
-    testplayer_skin = NewTexture(
-        "./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",
-        db_user.get(db_user.email == "test3@to2mbn.org"),
-        photoname="testplayer-skin",
-        model="ALEX"
-    )
-    testplayer3_cape = NewTexture(
-        "./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png",
-        db_user.get(db_user.email == "test3@to2mbn.org"),
-        photoname="testplayer3-cape",
-        Type="CAPE"
-    )
-    
-    CreateProfile(
-        "Chenwe_i_lin",
-        "1846913566@qq.com",
-        SKIN="74da44e9a1404ab79312dbc89b51a9f0",
-        CAPE="11fdd8a1db50406a894f0a3a08295bd7"
-    )
-    ''''''
-    CreateProfile(
-        "testplayer",
-        "test3@to2mbn.org",
-        SKIN="dce9f17b2e8045febb75d80020bbfd53"
-    )
-    '''
-    CreateProfile(
-        "testplayer1",
-        "test3@to2mbn.org",
-        CAPE="092fc3923f1144239a4183b34d1dc082"
-    )
+    #Chenwe_i_lin_skin = NewTexture("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-skin")
+    #Chenwe_i_lin_cape = NewTexture("./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-cape",Type="CAPE")
+    #testplayer_skin = NewTexture("./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer-skin",model="ALEX")
+    #testplayer3_cape = NewTexture("./data/texture/ddcf7d09723e799e59d7f19807d0bf5e3a2c044ce17e76a48b8ac4d27c0b16e0.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer3-cape",Type="CAPE")
+    #CreateProfile("Chenwe_i_lin","1846913566@qq.com",SKIN="74da44e9a1404ab79312dbc89b51a9f0",CAPE="11fdd8a1db50406a894f0a3a08295bd7")
+    #CreateProfile("testplayer","test3@to2mbn.org",SKIN="dce9f17b2e8045febb75d80020bbfd53")
+    CreateProfile("testplayer1","test3@to2mbn.org",CAPE="092fc3923f1144239a4183b34d1dc082")
