@@ -18,7 +18,7 @@ from werkzeug.contrib.fixers import LighttpdCGIRootFix
 import pydblite
 import base64
 import os
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, urlencode
 from datetime import timedelta
 import requests
 import redis
@@ -92,6 +92,10 @@ cache = {
 def ratelimit_handler(e):
     return Response(status=403)
 
+@app.errorhandler(404)
+def notfound(e):
+    return redirect(url_for('service_error', error="没有找到数据", errorMessage="请检查url是否正确.", status=404))
+
 @app.route(config.const.base + '/', methods=['GET'])
 def index():
     return Response(simplejson.dumps({
@@ -153,6 +157,7 @@ def authenticate():
                     AvailableProfiles = []
 
             try:
+                #print(model.profile.get(uuid=user.selected).name)
                 SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
             except Exception as e:
                 if "profileDoesNotExist" == e.__class__.__name__:
@@ -569,7 +574,11 @@ def serverinfo():
         "OAuth": {
             "github": {
                 "authorize_url": config.OAuth.github.authorize_url,
-                "icon": config.OAuth.github.icon
+                "icon": config.OAuth.github.icon,
+                "register": "".join([config.OAuth.github.authorize_url, "?", urlencode({
+                    "client_id": config.OAuth.github.client_id,
+                    "scope": config.OAuth.github.scope
+                })])
             }
         },
         "TokenTime": raw_config['TokenTime']
@@ -581,7 +590,22 @@ def kf_login_randomkey():
         data = request.json
         Randomkey = password.CreateSalt(length=8)
         authid = data['authid'] if 'authid' in data else str(uuid.uuid4()).replace('-', '')
-        user_result = model.getuser(data['username']).get()
+        try:
+            user_result = model.getuser(data['username'])
+        except Exception as e:
+            if "userDoesNotExist" == e.__class__.__name__:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise e
+        if not user_result:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         salt = user_result.passwordsalt
         if user_result:
             IReturn = {
@@ -611,7 +635,7 @@ def kf_login_verify():
         if not Data:
             return Response(status=403)
         else:
-            user_result = model.getuser(Data['username']).get()
+            user_result = model.getuser(Data['username'])
             if user_result:
                 AuthRequest = password.crypt(user_result.password, Data['HashKey'])
                 if AuthRequest == data['Password']:
@@ -654,7 +678,7 @@ def kf_user_changepasswd(username):
                 # 这玩意是个base64
                 encrypt = base64.b64decode(data['Password'])
                 decrypt_message = password.decrypt(encrypt, config.KeyPath.Private)
-                user = model.getuser(token.email).get()
+                user = model.getuser(token.email)
                 if password.crypt(decrypt_message, user.passwordsalt) == user.password:
                     return Response(status=204)
                 newsalt = base.CreateSalt(length=8)
@@ -679,7 +703,6 @@ def kf_user_changepasswd(username):
 @app.route("/api/knowledgefruits/oauth/github/resource")
 def github_resource():
     code = request.args.get("code")
-    print(request.args)
     if not code:
         error = {
             'error' : "ForbiddenOperationException",
@@ -721,6 +744,13 @@ def authorized():
             "scope": "user:email"
         }).json()
         email = result[0].get("email", "")
+    userresult = model.getuser(email)
+    if userresult:
+        resp = make_response(redirect(url_for('login')))
+        token = model.NewToken(userresult)
+        resp.set_cookie("accessToken", token.accessToken)
+        resp.set_cookie("clientToken", token.clientToken)
+        return resp
     cache_redis.set(".".join(["OAuth", "github", "response", code]), simplejson.dumps({
         "email": email,
         "face": face,
@@ -736,7 +766,107 @@ def register():
 
 @app.route('/api/knowledgefruits/login')
 def login():
+    if request.cookies.get("accessToken"):
+        return redirect(url_for("index_manager"))
     return render_template("login.html")
+
+@app.route("/api/knowledgefruits/error")
+def service_error():
+    return Response(render_template("error.html"), status=int(request.args.get("status", 500)))
+
+@app.route("/api/knowledgefruits/resource", methods=['POST'])
+def kapi_resource():
+    if request.is_json:
+        data = request.json
+        sourceId = data.get("sourceId")
+        if not sourceId:
+            return Response(status=403)
+        Data1 = cache_redis.get(".".join(["manager", "session", "resource", "callback", sourceId])).decode()
+        if not Data1:
+            return Response(status=404)
+        return Response(Data1, mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/manager/")
+def index_manager():
+    resp = make_response(render_template("manager_index.html"))
+    if request.cookies.get("accessToken"):
+        token = model.gettoken(request.cookies.get("accessToken"))
+        if not token:
+            return redirect(url_for('service_error', error="提交数据错误", errorMessage="你需要先登录才能访问.", status=403))
+        if token.status not in ["0", "1"]:
+            return redirect(url_for('service_error', error="登录密匙过期", errorMessage="你需要获取新的登录密匙才能访问.", status=403))
+        if token.status == '1':
+            newtoken = model.token(
+                accessToken=str(uuid.uuid4()).replace("-", ""),
+                clientToken=token.clientToken,
+                bind=token.bind,
+                email=token.email
+            )
+            newtoken.save()
+            token.delete_instance()
+            token = newtoken
+        if token.accessToken != request.cookies.get("accessToken"):
+            resp.set_cookie("accessToken", token.accessToken)
+        userresult = model.user.get(model.user.email == token.email)
+        try:
+            AvailableProfiles = [
+                model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==token.email)
+            ]
+        except Exception as e:
+            if "profileDoesNotExist" == e.__class__.__name__:
+                AvailableProfiles = []
+        dumpdata = {
+            "email": token.email,
+            "profiles": AvailableProfiles
+        }
+        cache_redis.set(".".join(["manager", "session", "resource", "callback", token.accessToken]), simplejson.dumps(dumpdata))
+    return resp
+
+@app.route("/api/knowledgefruits/user/textures")
+def user_textures():
+    email = request.args.get("username")
+    IReturn = []
+    if not email:
+        return redirect(url_for('service_error', error="缺少指定参数", errorMessage="你需要传入响应参数才能使用该接口", status=403))
+    userresult = model.getuser(email)
+    if not userresult:
+        return redirect(url_for('service_error', error="错误的参数", errorMessage="你传入的参数不正确", status=403))
+    result = model.gettextures_byuserid(userresult.uuid)
+    if not result:
+        return Response(simplejson.dumps([]), mimetype='application/json; charset=utf-8')
+    for i in result:
+        IReturn.append({
+            "textureid": i.textureid,
+            "name": i.photoname,
+            "height": int(i),
+            "width": int(i),
+            "type": i.type,
+            "model": i.model,
+            "hash": i.hash
+        })
+    return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/user/textures/accessToken")
+def user_textures_at():
+    accessToken = request.args.get("accessToken")
+    IReturn = []
+    if not accessToken:
+        return redirect(url_for('service_error', error="缺少指定参数", errorMessage="你需要传入响应参数才能使用该接口", status=403))
+    userresult = model.getuser_byaccesstoken(accessToken)
+    result = model.gettextures_byuserid(userresult.uuid)
+    if not result:
+        return Response(simplejson.dumps([]), mimetype='application/json; charset=utf-8')
+    for i in result:
+        IReturn.append({
+            "textureid": i.textureid,
+            "name": i.photoname,
+            "height": int(i.height),
+            "width": int(i.width),
+            "type": i.type,
+            "model": i.model,
+            "hash": i.hash
+        })
+    return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])
@@ -755,6 +885,41 @@ def imageview(image):
             ), mimetype='application/json; charset=utf-8', status=404)
         )
     return Response(image, mimetype='image/png')
+
+@app.route("/texture/<image>/head", methods=['GET'])
+def imageview_head(image):
+    try:
+        filename = "".join([os.getcwd(), "/data/texture/", image, '.png'])
+        texture = model.gettexture_hash(base.PngBinHash(filename))
+        if not texture:
+            raise NotFound(
+                description="SkinNotFound",
+                response=Response(simplejson.dumps(
+                    {
+                        "error" : "Not Found",
+                        'errorMessage' : "无法找到相应文件."
+                    }
+                ), mimetype='application/json; charset=utf-8', status=404)
+            )
+        if texture.type != "SKIN":
+            return redirect(url_for('service_error',
+                error="皮肤请求类型错误",
+                errorMessage="无法抓取该类型皮肤文件的head部分",
+                status=403
+            ))
+        image = base.gethead_skin(filename)
+    except FileNotFoundError:
+        raise NotFound(
+            description="SkinNotFound",
+            response=Response(simplejson.dumps(
+                {
+                    "error" : "Not Found",
+                    'errorMessage' : "无法找到相应文件."
+                }
+            ), mimetype='application/json; charset=utf-8', status=404)
+        )
+    return Response(image, mimetype='image/png')
+
 
 if __name__ == '__main__':
     #threading.Thread(target=crontab.start).start()

@@ -74,9 +74,7 @@ class banner(peewee.Model):
         database = db['global']
 '''
 
-def format_texture(profile, unMetaData=False):
-    OfflineUUID = base.OfflinePlayerUUID(profile.name).replace("-",'')
-    data = profile.get(uuid=OfflineUUID)
+def format_texture(profile, unMetaData=False, BetterData=False):
     try:
         data_skin = textures.select().where(textures.textureid==profile.skin)
     except Exception as e:
@@ -88,10 +86,15 @@ def format_texture(profile, unMetaData=False):
         if "texturesDoesNotExist" == e.__class__.__name__:
             data_cape = {}
     #print(type(data.time))
+    if BetterData:
+        if not [True, False][getskintype_profile(profile) == "SKIN" and getskinmodel_profile(profile) == "ALEX"]:
+            unMetaData = False
+        else:
+            unMetaData = True
     IReturn = {
-        "timestamp" : round(float(data.time)),
-        'profileId' : data.format_id,
-        'profileName' : data.name,
+        "timestamp" : base.gettimestamp(profile.time),
+        'profileId' : profile.format_id,
+        'profileName' : profile.name,
         'textures' : {}
     }
     if data_skin:
@@ -115,6 +118,64 @@ def format_texture(profile, unMetaData=False):
             del IReturn['textures'][i]["metadata"]
     return IReturn
 
+def getuser_byaccesstoken(accessToken):
+    nowtoken = gettoken(accessToken)
+    if not nowtoken:
+        return False
+    return user.get(user.email == nowtoken.email)
+
+def gettexture(textureid):
+    try:
+        result = textures.select().where(textures.textureid == textureid)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+'''
+def format_texture_raw(id_skin, id_cape=None, unMetaData=False, BetterData=False):
+    skin = gettexture(id_skin)
+    if id_cape:
+        cape = gettexture(id_cape)
+        if cape.type != "CAPE":
+            return False
+    else:
+        cape = {}
+    if skin.type != "SKIN":
+        return False
+    if BetterData:
+        if not [True, False][skin.model == "ALEX"]:
+            unMetaData = False
+        else:
+            unMetaData = True
+    IReturn = {
+        "timestamp" : int(profile.time),
+        'profileId' : profile.format_id,
+        'profileName' : profile.name,
+        'textures' : {}
+    }
+    if skin:
+        IReturn['textures'].update({
+            i.type : {
+                "url" : config.HostUrl + "/texture/" + i.hash,
+                "metadata" : {
+                    'model' : {"STEVE": 'default', "ALEX": 'slim'}[i.model]
+                }
+            } for i in skin
+        })
+    if cape:
+        IReturn['textures'].update({
+            i.type : {
+                "url" : config.HostUrl + "/texture/" + i.hash,
+                "metadata" : {}
+            } for i in cape
+        })
+    if unMetaData:
+        for i in IReturn['textures'].keys():
+            del IReturn['textures'][i]["metadata"]
+    return IReturn
+'''
 def getskintype_profile(iprofile):
     if not iprofile.skin:
         return False
@@ -126,6 +187,12 @@ def getskinmodel_profile(iprofile):
         return False
     texture = textures.get(textures.textureid == iprofile.skin)
     return texture.model
+
+def gettexture_hash(Hash):
+    if not Hash:
+        return False
+    texture = textures.get(textures.hash == Hash)
+    return texture
 
 def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, BetterData=False):
     def sign_self(data, key_file):
@@ -153,6 +220,26 @@ def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, 
             for i in range(len(IReturn['properties'])):
                 IReturn['properties'][i]['signature'] = sign_self(IReturn['properties'][i]['value'], "./data/rsa.pem")
     return IReturn
+
+def NewToken(user, ClientToken=str(uuid.uuid4()).replace("-", "")):
+    Token = token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=ClientToken, bind=user.selected, email=user.email)
+    Token.save()
+    return Token
+
+def nosignuuid():
+    return str(uuid.uuid4()).replace("-", "")
+
+def AutoRefrush(Token):
+    # 如果炸了,自动刷新(but status != 2),没有则返回原值
+    if Token.status == "2":
+        return False
+    if Token.status == "0":
+        return Token
+    ClientToken = Token.clientToken
+    AccessToken = nosignuuid()
+    ReturnToken = token(accessToken=AccessToken, clientToken=ClientToken, bind=Token.bind, email=Token.email)
+    ReturnToken.save()
+    return ReturnToken
 
 def is_validate(AccessToken, ClientToken=None):
     try:
@@ -214,7 +301,17 @@ def getprofile(name):
 
 def getuser(email):
     try:
-        result = user.select().where(user.email == email)
+        result = user.get(user.email == email)
+    except Exception as e:
+        if "userDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def gettextures_byuserid(userid):
+    try:
+        result = textures.select().where(textures.userid == userid)
     except Exception as e:
         if "userDoesNotExist" == e.__class__.__name__:
             return False

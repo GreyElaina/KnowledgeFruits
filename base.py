@@ -5,6 +5,12 @@ from io import BytesIO
 #from skimage import io
 from PIL import Image
 import struct
+import datetime
+import time
+
+def gettimestamp(date):
+    #return int(time.mktime(date.timetuple()))
+    return int(date)
 
 def hex2bin(hexstring):
     #return ''.join([chr(int(b, 16)) for b in [hexstring[i:i+2] for i in range(0, len(hexstring), 2)]])
@@ -120,6 +126,22 @@ def PngBinHash(SkinPath):
                     Buf.write(data[2].to_bytes(1, "big"))
         return hashlib.sha256(Buf.getvalue()).hexdigest()
 
+def getblock(skin, block=(1, 1)):
+    photo = Image.open(skin)
+    photo = photo.crop((block[0]*8, block[1]*8, (block[0]+1)*8, (block[1]+1)*8))
+    #with open("./faq.png", 'wb') as f:
+    #imgByteArr = BytesIO()
+    #photo.save(imgByteArr, format='PNG')
+    return photo
+
+def gethead_skin(skin):
+    rawhead = getblock(skin)
+    rawheat = getblock(skin, block=(5, 1))
+    rawhead.paste(rawheat, (0, 0), rawheat.split()[3])
+    imgByteArr = BytesIO()
+    rawhead.save(imgByteArr, format='PNG')
+    return imgByteArr.getvalue()
+
 class Dict(dict):
     __setattr__ = dict.__setitem__
     __getattr__ = dict.__getitem__
@@ -136,7 +158,12 @@ def StitchExpression(Object):
     return "".join([Object.content, "{%s,%s}" % (Object.length.min, Object.length.max), "$" if Object.isSigner else ""])
 
 if __name__ == "__main__":
-    print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
+    #print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
     #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
     #print(PngBinHash("./data/texture/texture-hash-test.png"))
-    pass
+    import time
+    time_start = time.time()
+    with open("./faq.png", "wb") as f:
+        f.write(gethead_skin("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png"))
+    time_end = time.time()
+    print('totally cost',time_end-time_start)
