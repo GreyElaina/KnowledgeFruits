@@ -106,8 +106,10 @@ def PngBinHash(SkinPath):
     print(photo.getpixel((2,0)))
     #return photo.getpixel((4, 4))
     with BytesIO() as Buf:
-        Buf.write(struct.pack(">I", width))
-        Buf.write(struct.pack(">I", height))
+        #Buf.write(struct.pack(">I", width))
+        #Buf.write(struct.pack(">I", height))
+        Buf.write(width.to_bytes(4, "big"))
+        Buf.write(height.to_bytes(4, "big"))
         for w in range(width):
             for h in range(height):
                 data = list(photo.getpixel((w, h)))
