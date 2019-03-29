@@ -15,7 +15,6 @@ import simplejson
 from flask_apscheduler import APScheduler
 from os.path import exists as FileExists
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
-import pydblite
 import base64
 import os
 from urllib.parse import urlparse, parse_qs, urlencode
@@ -145,9 +144,8 @@ def authenticate():
             # 登录成功.
             ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
             AccessToken = str(uuid.uuid4()).replace("-","")
-            
-            Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=user.selected, email=user.email)
-            Token.save() # 颁发Token
+            notDoubleProfile = False
+
             try:
                 AvailableProfiles = [
                     model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==user.email)
@@ -158,10 +156,21 @@ def authenticate():
 
             try:
                 #print(model.profile.get(uuid=user.selected).name)
-                SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
+                Profileresult = model.profile.select().where(model.profile.createby == user.email)
+                if len(Profileresult) != 1:
+                    SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
+                else:
+                    notDoubleProfile = True
+                    SelectedProfile = model.format_profile(Profileresult.get())
             except Exception as e:
                 if "profileDoesNotExist" == e.__class__.__name__:
                     SelectedProfile = {}
+
+            if notDoubleProfile:
+                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid, email=user.email)
+            else:
+                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, email=user.email)
+            Token.save() # 颁发Token
 
             IReturn = {
                 "accessToken" : AccessToken,
@@ -296,14 +305,16 @@ def validate():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         else:
-            User = model.user.get(email=result.email)
+            #User = model.user.get(email=result.email)
             '''if User.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
                 }), status=403, mimetype='application/json; charset=utf-8')'''
 
-            if result.status in [2,1]:
+            if result.status in ["2", "1"]:
+                if result.status == "2":
+                    result.delete_instance()
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
@@ -341,7 +352,7 @@ def invalidate():
                 #return Response(status=204)
             raise e
         else:
-            User = model.user.get(email=result.email)
+            #User = model.user.get(email=result.email)
             '''if User.permission == 0:
                 return Response(simplejson.dumps({
                     'error' : "ForbiddenOperationException",
@@ -384,7 +395,7 @@ def signout():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
-                    model.token.delete().where(model.token.bind == result.selected).execute()
+                    model.token.delete().where(model.token.email == result.email).execute()
                 except Exception as e:
                     if "userDoesNotExist" == e.__class__.__name__:
                         error = {

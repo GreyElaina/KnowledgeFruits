@@ -22,8 +22,6 @@ class user(peewee.Model):
     email = peewee.CharField()
     password = peewee.CharField()
     passwordsalt = peewee.CharField()
-    #playername = peewee.CharField()
-    selected = peewee.CharField(null=True)
 
     class Meta:
         database = db['global']
