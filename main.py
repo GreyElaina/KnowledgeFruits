@@ -1,26 +1,29 @@
-from flask import Flask, url_for, Response, request, abort, render_template, session, redirect
-import peewee
-import time
+import base64
 import datetime
-from flask.helpers import make_response
-import model
-import base
-import password
+import os
 import re
+import time
+import uuid
+from datetime import timedelta
+from os.path import exists as FileExists
+from urllib.parse import parse_qs, urlencode, urlparse
+
+import peewee
+import redis
+import requests
+import simplejson
+from flask import (Flask, Response, abort, redirect, render_template, request,
+                   session, url_for)
+from flask.helpers import make_response
+from flask_apscheduler import APScheduler
 from flask_limiter import Limiter
 from flask_limiter.util import get_remote_address
-import uuid
-from werkzeug.exceptions import HTTPException, NotFound
-import simplejson
-from flask_apscheduler import APScheduler
-from os.path import exists as FileExists
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
-import base64
-import os
-from urllib.parse import urlparse, parse_qs, urlencode
-from datetime import timedelta
-import requests
-import redis
+from werkzeug.exceptions import HTTPException, NotFound
+
+import base
+import model
+import password
 
 config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
 raw_config = simplejson.loads(open("./data/config.json").read())
@@ -769,6 +772,7 @@ def authorized():
         "bio": r.get("bio", ""),
         "way": "Github"
     }))
+    cache_redis.expire(".".join(["OAuth", "github", "response", code]), 180)
     return redirect(url_for('register', code=code))
 
 @app.route('/api/knowledgefruits/register')
