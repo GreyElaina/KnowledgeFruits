@@ -38,7 +38,7 @@ class token(peewee.Model):
         database = db['global']
 
 class profile(peewee.Model):
-    format_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
+    profile_id = peewee.CharField(max_length=32, default=str(uuid.uuid4()).replace('-',''))
     uuid = peewee.CharField(max_length=32)
     name = peewee.CharField()
     skin = peewee.CharField(null=True)
@@ -49,7 +49,7 @@ class profile(peewee.Model):
         database = db['global']
 
 class textures(peewee.Model):
-    userid = peewee.CharField(32) # 标识上传者
+    userid = peewee.CharField(32) # 标识上传者, UUID
     textureid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
     photoname = peewee.CharField()
     height = peewee.IntegerField(default=32)
@@ -91,7 +91,7 @@ def format_texture(profile, unMetaData=False, BetterData=False):
             unMetaData = True
     IReturn = {
         "timestamp" : base.gettimestamp(profile.time),
-        'profileId' : profile.format_id,
+        'profileId' : profile.profile_id,
         'profileName' : profile.name,
         'textures' : {}
     }
@@ -124,56 +124,14 @@ def getuser_byaccesstoken(accessToken):
 
 def gettexture(textureid):
     try:
-        result = textures.select().where(textures.textureid == textureid)
+        result = textures.select().where(textures.textureid == textureid).get()
     except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
+        if "texturesDoesNotExist" == e.__class__.__name__:
             return False
         raise e
     else:
         return result
-'''
-def format_texture_raw(id_skin, id_cape=None, unMetaData=False, BetterData=False):
-    skin = gettexture(id_skin)
-    if id_cape:
-        cape = gettexture(id_cape)
-        if cape.type != "CAPE":
-            return False
-    else:
-        cape = {}
-    if skin.type != "SKIN":
-        return False
-    if BetterData:
-        if not [True, False][skin.model == "ALEX"]:
-            unMetaData = False
-        else:
-            unMetaData = True
-    IReturn = {
-        "timestamp" : int(profile.time),
-        'profileId' : profile.format_id,
-        'profileName' : profile.name,
-        'textures' : {}
-    }
-    if skin:
-        IReturn['textures'].update({
-            i.type : {
-                "url" : config.HostUrl + "/texture/" + i.hash,
-                "metadata" : {
-                    'model' : {"STEVE": 'default', "ALEX": 'slim'}[i.model]
-                }
-            } for i in skin
-        })
-    if cape:
-        IReturn['textures'].update({
-            i.type : {
-                "url" : config.HostUrl + "/texture/" + i.hash,
-                "metadata" : {}
-            } for i in cape
-        })
-    if unMetaData:
-        for i in IReturn['textures'].keys():
-            del IReturn['textures'][i]["metadata"]
-    return IReturn
-'''
+
 def getskintype_profile(iprofile):
     if not iprofile.skin:
         return False
@@ -204,7 +162,7 @@ def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, 
             unMetaData = True
     textures = simplejson.dumps(format_texture(profile, unMetaData))
     IReturn = {
-        "id" : profile.format_id,
+        "id" : profile.profile_id,
         "name" : profile.name,
     }
     if Properties:
@@ -229,15 +187,16 @@ def nosignuuid():
 
 def AutoRefrush(Token):
     # 如果炸了,自动刷新(but status != 2),没有则返回原值
-    if Token.status == "2":
-        return False
-    if Token.status == "0":
-        return Token
     ClientToken = Token.clientToken
     AccessToken = nosignuuid()
-    ReturnToken = token(accessToken=AccessToken, clientToken=ClientToken, bind=Token.bind, email=Token.email)
-    ReturnToken.save()
-    return ReturnToken
+    if Token.status in ["2", "1"]:
+        ReturnToken = token(accessToken=AccessToken, clientToken=ClientToken, bind=Token.bind, email=Token.email)
+        ReturnToken.save()
+        return ReturnToken
+    if Token.status == "0":
+        return Token
+    
+    return Token
 
 def is_validate(AccessToken, ClientToken=None):
     try:
@@ -297,6 +256,16 @@ def getprofile(name):
     else:
         return result
 
+def getprofile_id(pid):
+    try:
+        result = profile.select().where(profile.profile_id == pid)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
 def getuser(email):
     try:
         result = user.get(user.email == email)
@@ -319,7 +288,7 @@ def gettextures_byuserid(userid):
 
 def findprofilebyid(fid):
     try:
-        result = profile.select().where(profile.format_id == fid)
+        result = profile.select().where(profile.profile_id == fid)
     except Exception as e:
         if "profileDoesNotExist" == e.__class__.__name__:
             return False
@@ -327,10 +296,81 @@ def findprofilebyid(fid):
     else:
         return result.get()
 
+def findprofile(args):
+    try:
+        result = profile.select().where(args)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def findtextures(args):
+    try:
+        result = textures.select().where(args)
+    except Exception as e:
+        if "texturesDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
 def format_user(user):
     return {
         'id' : user.uuid,
         'properties' : []
+    }
+
+def kf_format_profile(p):
+    skininfo = gettexture(p.skin)
+    capeinfo = gettexture(p.cape)
+    Info = {
+        "profileId": p.profile_id,
+        "uuid": p.uuid,
+        "name": p.name,
+        "textures": {},
+        "createby": p.createby
+    }
+    if skininfo:
+        Info['textures']['skin'] = {
+            "updater": skininfo.userid,
+            "textureid": skininfo.textureid,
+            "name": skininfo.photoname,
+            "size": {
+                "width": skininfo.width,
+                "height": skininfo.height
+            },
+            "type": skininfo.type.lower(),
+            "model": {"STEVE": 'default', "ALEX": 'slim'}[skininfo.model],
+            "hash": skininfo.hash
+        }
+    if capeinfo:
+        Info['textures']['cape'] = {
+            "updater": capeinfo.userid,
+            "textureid": capeinfo.textureid,
+            "name": capeinfo.photoname,
+            "size": {
+                "width": capeinfo.width,
+                "height": capeinfo.height
+            },
+            "type": capeinfo.type.lower(),
+            "hash": capeinfo.hash
+        }
+    return Info
+
+def kf_format_textures(t):
+    return {
+        "updater": t.userid,
+        "textureid": t.textureid,
+        "name": t.photoname,
+        "size": {
+            "width": t.width,
+            "height": t.height
+        },
+        "type": t.type.lower(),
+        "model": {"STEVE": 'default', "ALEX": 'slim'}[t.model],
+        "hash": t.hash
     }
 
 def NewProfile(Playername, User, Png, Type='SKIN', Model="STEVE"):

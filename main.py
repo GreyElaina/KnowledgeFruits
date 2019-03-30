@@ -237,7 +237,7 @@ def refresh():
             PostProfile = data['selectedProfile']
             # 验证客户端提供的角色信息
             try:
-                needuser = model.profile.get(format_id=PostProfile['id'], name=PostProfile['name'])
+                needuser = model.profile.get(profile_id=PostProfile['id'], name=PostProfile['name'])
             except Exception as e:
                 if "profileDoesNotExist" == e.__class__.__name__:
                     error = {
@@ -447,7 +447,7 @@ def joinserver():
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
-            playeruuid = model.profile.get(name=result.name).format_id.replace("-", "")
+            playeruuid = model.profile.get(name=result.name).profile_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
                 #sj = model.ms_serverjoin(
                 #    AccessToken=AccessToken,
@@ -516,9 +516,9 @@ def searchprofile(getuuid):
         #signed = False if args['unsigned'] == 'false' else True
         if args['unsigned'] == 'false':
             try:
-                result = model.profile.get(format_id=getuuid)
+                result = model.profile.get(profile_id=getuuid)
                 IReturn = model.format_profile(
-                    #model.user.get(model.user.playername == model.profile.get(format_id=getuuid).name),
+                    #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
                     result,
                     Properties=True,
                     unsigned=False,
@@ -531,9 +531,9 @@ def searchprofile(getuuid):
             return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
         if args['unsigned'] == 'true':
             try:
-                result = model.profile.get(format_id=getuuid)
+                result = model.profile.get(profile_id=getuuid)
                 IReturn = model.format_profile(
-                    #model.user.get(model.user.playername == model.profile.get(format_id=getuuid).name),
+                    #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
                     result,
                     Properties=True,
                     unsigned=True,
@@ -546,9 +546,9 @@ def searchprofile(getuuid):
             return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
     else:
         try:
-            result = model.profile.get(format_id=getuuid)
+            result = model.profile.get(profile_id=getuuid)
             IReturn = model.format_profile(
-                #model.user.get(model.user.playername == model.profile.get(format_id=getuuid).name),
+                #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
                 result,
                 Properties=True,
                 unsigned=True,
@@ -775,6 +775,50 @@ def authorized():
     cache_redis.expire(".".join(["OAuth", "github", "response", code]), 180)
     return redirect(url_for('register', code=code))
 
+@app.route("/api/knowledgefruits/textures/info/<path:args>")
+def kf_texturesinfo(args):
+    if (len(args.split("/")) % 2) != 0:
+        return Response(simplejson.dumps({
+            "err": "WrongArgs",
+            "message": "参数格式错误"
+        }), mimetype='application/json; charset=utf-8', status=403)
+    Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
+    content = [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][0]
+    for i in [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
+        content = content & i
+    print(content)
+    try:
+        return Response(simplejson.dumps([
+            model.kf_format_textures(i) for i in model.findtextures(content)
+        ]), mimetype='application/json; charset=utf-8')
+    except KeyError as e:
+        return Response(simplejson.dumps({
+            "err": "WrongArgs",
+            "message": "预料之外的参数传入"
+        }), mimetype='application/json; charset=utf-8', status=403)
+
+@app.route("/api/knowledgefruits/profile/info/<path:args>")
+def kf_profileinfo(args):
+    if (len(args.split("/")) % 2) != 0:
+        return Response(simplejson.dumps({
+            "err": "WrongArgs",
+            "message": "参数格式错误"
+        }), mimetype='application/json; charset=utf-8', status=403)
+    Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
+    content = [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][0]
+    for i in [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
+        content = content & i
+    print(content)
+    try:
+        return Response(simplejson.dumps([
+            model.kf_format_profile(i) for i in model.findprofile(content)
+        ]), mimetype='application/json; charset=utf-8')
+    except KeyError as e:
+        return Response(simplejson.dumps({
+            "err": "WrongArgs",
+            "message": "预料之外的参数传入"
+        }), mimetype='application/json; charset=utf-8', status=403)
+
 @app.route('/api/knowledgefruits/register')
 def register():
     return render_template("register.html")
@@ -782,7 +826,8 @@ def register():
 @app.route('/api/knowledgefruits/login')
 def login():
     if request.cookies.get("accessToken"):
-        return redirect(url_for("index_manager"))
+        if model.gettoken(request.cookies.get("accessToken")):
+            return redirect(url_for("index_manager"))
     return render_template("login.html")
 
 @app.route("/api/knowledgefruits/error")
@@ -825,7 +870,7 @@ def index_manager():
         userresult = model.user.get(model.user.email == token.email)
         try:
             AvailableProfiles = [
-                model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==token.email)
+                model.format_profile(i, unsigned=True, BetterData=True) for i in model.profile.select().where(model.profile.createby==token.email)
             ]
         except Exception as e:
             if "profileDoesNotExist" == e.__class__.__name__:
@@ -835,6 +880,7 @@ def index_manager():
             "profiles": AvailableProfiles
         }
         cache_redis.set(".".join(["manager", "session", "resource", "callback", token.accessToken]), simplejson.dumps(dumpdata))
+        cache_redis.expire(".".join(["manager", "session", "resource", "callback", token.accessToken]), 60)
     return resp
 
 @app.route("/api/knowledgefruits/user/textures")
@@ -907,14 +953,10 @@ def imageview_head(image):
         filename = "".join([os.getcwd(), "/data/texture/", image, '.png'])
         texture = model.gettexture_hash(base.PngBinHash(filename))
         if not texture:
-            raise NotFound(
-                description="SkinNotFound",
-                response=Response(simplejson.dumps(
-                    {
-                        "error" : "Not Found",
-                        'errorMessage' : "无法找到相应文件."
-                    }
-                ), mimetype='application/json; charset=utf-8', status=404)
+            return redirect(url_for('service_error',
+                error="Not Found",
+                errorMessage="无法找到相应文件.",
+                status=404)
             )
         if texture.type != "SKIN":
             return redirect(url_for('service_error',
@@ -924,14 +966,10 @@ def imageview_head(image):
             ))
         image = base.gethead_skin(filename)
     except FileNotFoundError:
-        raise NotFound(
-            description="SkinNotFound",
-            response=Response(simplejson.dumps(
-                {
-                    "error" : "Not Found",
-                    'errorMessage' : "无法找到相应文件."
-                }
-            ), mimetype='application/json; charset=utf-8', status=404)
+        return redirect(url_for('service_error',
+            error="Not Found",
+            errorMessage="无法找到相应文件.",
+            status=404)
         )
     return Response(image, mimetype='image/png')
 
