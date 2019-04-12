@@ -23,20 +23,21 @@
                 <div class="ui vertical menu">
                     <a class="active teal item">
                         角色数
-                        <div class="ui teal left pointing label">{[ profilelength ]}</div>
+                        <div class="ui teal left pointing label">{[ profiles.length ]}</div>
                     </a>
                     <a class="item">
                         材质数
-                        <div class="ui label">{[ textureslength ]}</div>
+                        <div class="ui label">{[ textures.length ]}</div>
                     </a>
                 </div>
             </div>
             <table class="ui blue table">
                 <thead>
                     <tr>
+                        <th>ID</th>
                         <th>角色名</th>
-                        <th></th>
-                        <th>Protein</th>
+                        <th>角色类型</th>
+                        <th>模型类型</th>
                     </tr>
                 </thead>
                 <tbody>
@@ -87,8 +88,6 @@
         el: "#sidebar",
         delimiters: ['{[', ']}'],
         data: {
-            profilelength: "0",
-            textureslength: "0",
             profiles: [],
             textures: [],
             email: ""
@@ -100,7 +99,6 @@
             axios.post("/api/knowledgefruits/resource", {
                 sourceId: Cookies.get("accessToken")
             }).then(function(response){
-                that.profilelength = response.data.profiles.length
                 that.profiles = response.data.profiles
                 that.email = response.data.email
             })
@@ -108,7 +106,6 @@
                 params: {accessToken: Cookies.get("accessToken")}
             }).then(function(response){
                 that.textures = response.data
-                that.textureslength = response.data.length
             })
         },
     })

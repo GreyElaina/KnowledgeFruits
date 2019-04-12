@@ -93,11 +93,11 @@ cache = {
 @app.errorhandler(429)
 def ratelimit_handler(e):
     return Response(status=403)
-
+'''
 @app.errorhandler(404)
 def notfound(e):
     return redirect(url_for('service_error', error="没有找到数据", errorMessage="请检查url是否正确.", status=404))
-
+'''
 @app.route(config.const.base + '/', methods=['GET'])
 def index():
     return Response(simplejson.dumps({
@@ -109,7 +109,7 @@ def index():
 # /authserver
 
 #@limiter.exempt
-#@limiter.limit("1/second", error_message=Response(status=403))
+#@limiter.limit("1/second", error_errorMessage=Response(status=403))
 @app.route(config.const.base + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
@@ -151,7 +151,7 @@ def authenticate():
 
             try:
                 AvailableProfiles = [
-                    model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==user.email)
+                    model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==user.uuid)
                 ]
             except Exception as e:
                 if "profileDoesNotExist" == e.__class__.__name__:
@@ -159,7 +159,7 @@ def authenticate():
 
             try:
                 #print(model.profile.get(uuid=user.selected).name)
-                Profileresult = model.profile.select().where(model.profile.createby == user.email)
+                Profileresult = model.profile.select().where(model.profile.createby == user.uuid)
                 if len(Profileresult) != 1:
                     SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
                 else:
@@ -170,9 +170,9 @@ def authenticate():
                     SelectedProfile = {}
 
             if notDoubleProfile:
-                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid, email=user.email)
+                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid, user=user.uuid)
             else:
-                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, email=user.email)
+                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, user=user.uuid)
             Token.save() # 颁发Token
 
             IReturn = {
@@ -222,7 +222,7 @@ def refresh():
                 'errorMessage' : "Invalid token."
             }
             return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        User = model.user.get(email=OldToken.email)
+        User = model.user.get(uuid=OldToken.user)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
                 'error' : "ForbiddenOperationException",
@@ -262,7 +262,7 @@ def refresh():
                         'errorMessage' : "Access token already has a profile assigned."
                     }
                     return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                if needuser.createby != OldToken.email:
+                if needuser.createby != OldToken.user:
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Attempting to bind a token to a role that does not belong to its corresponding user."
@@ -271,7 +271,7 @@ def refresh():
                 TokenSelected = model.findprofilebyid(PostProfile['id']).uuid
                 Can = True
 
-        NewToken = model.token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, email=OldToken.email, bind=TokenSelected)
+        NewToken = model.token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, user=OldToken.user, bind=TokenSelected)
         NewToken.save()
         OldToken.delete_instance()
         IReturn = {
@@ -398,7 +398,7 @@ def signout():
                 return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 try:
-                    model.token.delete().where(model.token.email == result.email).execute()
+                    model.token.delete().where(model.token.user == result.uuid).execute()
                 except Exception as e:
                     if "userDoesNotExist" == e.__class__.__name__:
                         error = {
@@ -671,7 +671,7 @@ def kf_login_verify():
             else:
                 cache_redis.delete(data['authId'])
                 return Response(status=403)
-            
+
 @app.route("/api/knowledgefruits/user/changepassword/<username>", methods=['POST'])
 def kf_user_changepasswd(username):
     if request.is_json:
@@ -691,12 +691,12 @@ def kf_user_changepasswd(username):
                 # 开始解析由公钥(/api/yggdrasil)加密的东西
                 # 这玩意是个base64
                 encrypt = base64.b64decode(data['Password'])
-                decrypt_message = password.decrypt(encrypt, config.KeyPath.Private)
+                decrypt_errorMessage = password.decrypt(encrypt, config.KeyPath.Private)
                 user = model.getuser(token.email)
-                if password.crypt(decrypt_message, user.passwordsalt) == user.password:
+                if password.crypt(decrypt_errorMessage, user.passwordsalt) == user.password:
                     return Response(status=204)
                 newsalt = base.CreateSalt(length=8)
-                newpassword = password.crypt(decrypt_message, newsalt)
+                newpassword = password.crypt(decrypt_errorMessage, newsalt)
                 user.password = newpassword
                 user.passwordsalt = newsalt
                 user.save()
@@ -714,79 +714,17 @@ def kf_user_changepasswd(username):
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
 
-@app.route("/api/knowledgefruits/oauth/github/resource")
-def github_resource():
-    code = request.args.get("code")
-    if not code:
-        error = {
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid credentials. Invalid username or password."
-        }
-        return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-    Data = simplejson.loads(cache_redis.get(".".join(["OAuth", "github", "response", code])))
-    if not Data:
-        return Response(status=404)
-    return Response(simplejson.dumps(Data), mimetype='application/json; charset=utf-8')
-
-@app.route('/api/knowledgefruits/oauth/github/callback')
-def authorized():
-    code = request.args.get("code")
-    if not code:
-        error = {
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid credentials. Invalid username or password."
-        }
-        return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
- 
-    r = requests.get(config.OAuth.github.access_token_url, params={
-        "client_id": config.OAuth.github.client_id,
-        "client_secret": config.OAuth.github.client_secret,
-        "code": code,
-        "redirect_uri": "http://127.0.0.1:5001/api/knowledgefruits/oauth/github/callback"
-    }).text
-    data = parse_qs(r)
-    accessToken = data['access_token'][0]
-    r = requests.get(config.OAuth.github.user, params={
-        "access_token": accessToken
-    }).json()
-    face = r.get("avatar_url", "")
-    if r.get("email") != None:
-        email = r.get("email")
-    else:
-        result = requests.get(config.OAuth.github.email, params={
-            "access_token": accessToken,
-            "scope": "user:email"
-        }).json()
-        email = result[0].get("email", "")
-    userresult = model.getuser(email)
-    if userresult:
-        resp = make_response(redirect(url_for('login')))
-        token = model.NewToken(userresult)
-        resp.set_cookie("accessToken", token.accessToken)
-        resp.set_cookie("clientToken", token.clientToken)
-        return resp
-    cache_redis.set(".".join(["OAuth", "github", "response", code]), simplejson.dumps({
-        "email": email,
-        "face": face,
-        "name": r.get("login", ""),
-        "bio": r.get("bio", ""),
-        "way": "Github"
-    }))
-    cache_redis.expire(".".join(["OAuth", "github", "response", code]), 180)
-    return redirect(url_for('register', code=code))
-
 @app.route("/api/knowledgefruits/textures/info/<path:args>")
 def kf_texturesinfo(args):
     if (len(args.split("/")) % 2) != 0:
         return Response(simplejson.dumps({
             "err": "WrongArgs",
-            "message": "参数格式错误"
+            "errorMessage": "参数格式错误"
         }), mimetype='application/json; charset=utf-8', status=403)
     Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
     content = [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][0]
     for i in [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
         content = content & i
-    print(content)
     try:
         return Response(simplejson.dumps([
             model.kf_format_textures(i) for i in model.findtextures(content)
@@ -794,7 +732,7 @@ def kf_texturesinfo(args):
     except KeyError as e:
         return Response(simplejson.dumps({
             "err": "WrongArgs",
-            "message": "预料之外的参数传入"
+            "errorMessage": "预料之外的参数传入"
         }), mimetype='application/json; charset=utf-8', status=403)
 
 @app.route("/api/knowledgefruits/profile/info/<path:args>")
@@ -802,13 +740,12 @@ def kf_profileinfo(args):
     if (len(args.split("/")) % 2) != 0:
         return Response(simplejson.dumps({
             "err": "WrongArgs",
-            "message": "参数格式错误"
+            "errorMessage": "参数格式错误"
         }), mimetype='application/json; charset=utf-8', status=403)
     Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
     content = [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][0]
     for i in [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
         content = content & i
-    print(content)
     try:
         return Response(simplejson.dumps([
             model.kf_format_profile(i) for i in model.findprofile(content)
@@ -816,118 +753,85 @@ def kf_profileinfo(args):
     except KeyError as e:
         return Response(simplejson.dumps({
             "err": "WrongArgs",
-            "message": "预料之外的参数传入"
+            "errorMessage": "预料之外的参数传入"
         }), mimetype='application/json; charset=utf-8', status=403)
 
-@app.route('/api/knowledgefruits/register')
-def register():
-    return render_template("register.html")
-
-@app.route('/api/knowledgefruits/login')
-def login():
-    if request.cookies.get("accessToken"):
-        if model.gettoken(request.cookies.get("accessToken")):
-            return redirect(url_for("index_manager"))
-    return render_template("login.html")
-
-@app.route("/api/knowledgefruits/error")
-def service_error():
-    return Response(render_template("error.html"), status=int(request.args.get("status", 500)))
-
-@app.route("/api/knowledgefruits/resource", methods=['POST'])
-def kapi_resource():
+@app.route('/api/knowledgefruits/mixins/authserver/authenticate/noprofile', methods=['POST'])
+def authenticate_mixined():
+    IReturn = {}
     if request.is_json:
         data = request.json
-        sourceId = data.get("sourceId")
-        if not sourceId:
-            return Response(status=403)
-        Data1 = cache_redis.get(".".join(["manager", "session", "resource", "callback", sourceId])).decode()
-        if not Data1:
-            return Response(status=404)
-        return Response(Data1, mimetype='application/json; charset=utf-8')
-
-@app.route("/api/knowledgefruits/manager/")
-def index_manager():
-    resp = make_response(render_template("manager_index.html"))
-    if request.cookies.get("accessToken"):
-        token = model.gettoken(request.cookies.get("accessToken"))
-        if not token:
-            return redirect(url_for('service_error', error="提交数据错误", errorMessage="你需要先登录才能访问.", status=403))
-        if token.status not in ["0", "1"]:
-            return redirect(url_for('service_error', error="登录密匙过期", errorMessage="你需要获取新的登录密匙才能访问.", status=403))
-        if token.status == '1':
-            newtoken = model.token(
-                accessToken=str(uuid.uuid4()).replace("-", ""),
-                clientToken=token.clientToken,
-                bind=token.bind,
-                email=token.email
-            )
-            newtoken.save()
-            token.delete_instance()
-            token = newtoken
-        if token.accessToken != request.cookies.get("accessToken"):
-            resp.set_cookie("accessToken", token.accessToken)
-        userresult = model.user.get(model.user.email == token.email)
+        user = {}
         try:
-            AvailableProfiles = [
-                model.format_profile(i, unsigned=True, BetterData=True) for i in model.profile.select().where(model.profile.createby==token.email)
-            ]
+            user = model.user.get(model.user.email==data['username'])
         except Exception as e:
-            if "profileDoesNotExist" == e.__class__.__name__:
-                AvailableProfiles = []
-        dumpdata = {
-            "email": token.email,
-            "profiles": AvailableProfiles
-        }
-        cache_redis.set(".".join(["manager", "session", "resource", "callback", token.accessToken]), simplejson.dumps(dumpdata))
-        cache_redis.expire(".".join(["manager", "session", "resource", "callback", token.accessToken]), 60)
-    return resp
+            if "userDoesNotExist" == e.__class__.__name__:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }
+                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise e
+        '''if user.permission == 0:
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+            }), status=403, mimetype='application/json; charset=utf-8')'''
+        if not cache_redis.get(".".join(['lock', user.email])):
+            cache_redis.setnx(".".join(['lock', user.email]), "locked")
+            cache_redis.expire(".".join(['lock', user.email]), config.AuthLimit)
+        else:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
 
-@app.route("/api/knowledgefruits/user/textures")
-def user_textures():
-    email = request.args.get("username")
-    IReturn = []
-    if not email:
-        return redirect(url_for('service_error', error="缺少指定参数", errorMessage="你需要传入响应参数才能使用该接口", status=403))
-    userresult = model.getuser(email)
-    if not userresult:
-        return redirect(url_for('service_error', error="错误的参数", errorMessage="你传入的参数不正确", status=403))
-    result = model.gettextures_byuserid(userresult.uuid)
-    if not result:
-        return Response(simplejson.dumps([]), mimetype='application/json; charset=utf-8')
-    for i in result:
-        IReturn.append({
-            "textureid": i.textureid,
-            "name": i.photoname,
-            "height": int(i),
-            "width": int(i),
-            "type": i.type,
-            "model": i.model,
-            "hash": i.hash
-        })
-    return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        if password.crypt(data['password'], user.passwordsalt) == user.password:
+            # 登录成功.
+            ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
+            AccessToken = str(uuid.uuid4()).replace("-","")
+            notDoubleProfile = False
 
-@app.route("/api/knowledgefruits/user/textures/accessToken")
-def user_textures_at():
-    accessToken = request.args.get("accessToken")
-    IReturn = []
-    if not accessToken:
-        return redirect(url_for('service_error', error="缺少指定参数", errorMessage="你需要传入响应参数才能使用该接口", status=403))
-    userresult = model.getuser_byaccesstoken(accessToken)
-    result = model.gettextures_byuserid(userresult.uuid)
+            try:
+                #print(model.profile.get(uuid=user.selected).name)
+                Profileresult = model.profile.select().where(model.profile.createby == user.uuid)
+                if len(Profileresult) == 1:
+                    notDoubleProfile = True
+            except Exception as e:
+                if "profileDoesNotExist" == e.__class__.__name__:
+                    pass
+
+            if notDoubleProfile:
+                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid, user=user.uuid)
+            else:
+                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, user=user.uuid)
+            Token.save()
+
+            IReturn = {
+                "accessToken" : AccessToken,
+                "clientToken" : ClientToken
+            }
+            if "requestUser" in data:
+                if data['requestUser']:
+                    IReturn['user'] = model.format_user(user)
+        else:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/useruuid/email/<email>")
+def kf_search_user_email(email):
+    result = model.getuser(email)
     if not result:
-        return Response(simplejson.dumps([]), mimetype='application/json; charset=utf-8')
-    for i in result:
-        IReturn.append({
-            "textureid": i.textureid,
-            "name": i.photoname,
-            "height": int(i.height),
-            "width": int(i.width),
-            "type": i.type,
-            "model": i.model,
-            "hash": i.hash
-        })
-    return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        return Response(simplejson.dumps({
+            "error": "WrongArgs",
+            "errorMessage": "错误的参数"
+        }), mimetype='application/json; charset=utf-8', status=403)
+    return Response(simplejson.dumps({"uuid": result.uuid}), mimetype='application/json; charset=utf-8')
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])
@@ -975,10 +879,6 @@ def imageview_head(image):
 
 
 if __name__ == '__main__':
-    #threading.Thread(target=crontab.start).start()
-    #model.db['cache'].create_tables([model.ms_serverjoin])
-    # Drop Cache Table
-    #model.ms_serverjoin.delete().execute()
     if FileExists('./data/global.db'):
         model.db['global'].create_tables([model.profile, model.token, model.user, model.textures])
     if False in [FileExists(config.KeyPath.Private), FileExists(config.KeyPath.Public)]:

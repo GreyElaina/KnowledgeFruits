@@ -31,7 +31,7 @@ class token(peewee.Model):
     clientToken = peewee.CharField()
     status = peewee.CharField(default=0)
     bind = peewee.CharField(null=True)
-    email = peewee.CharField()
+    user = peewee.CharField()
     setuptime = peewee.TimestampField(default=time.time())
 
     class Meta:
@@ -409,4 +409,5 @@ if __name__ == '__main__':
     #testplayer3_cape = NewTexture("./data/texture/ddcf7d09723e799e59d7f19807d0bf5e3a2c044ce17e76a48b8ac4d27c0b16e0.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer3-cape",Type="CAPE")
     #CreateProfile("Chenwe_i_lin","1846913566@qq.com",SKIN="74da44e9a1404ab79312dbc89b51a9f0",CAPE="11fdd8a1db50406a894f0a3a08295bd7")
     #CreateProfile("testplayer","test3@to2mbn.org",SKIN="dce9f17b2e8045febb75d80020bbfd53")
-    CreateProfile("testplayer1","test3@to2mbn.org",CAPE="092fc3923f1144239a4183b34d1dc082")
+    #CreateProfile("testplayer1","test3@to2mbn.org",CAPE="092fc3923f1144239a4183b34d1dc082")
+    db['global'].create_tables([token])

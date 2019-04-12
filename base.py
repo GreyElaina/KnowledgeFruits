@@ -4,7 +4,6 @@ import random
 from io import BytesIO
 #from skimage import io
 from PIL import Image
-import struct
 import datetime
 import time
 
@@ -26,6 +25,12 @@ def bin2hex(sendbin):
       d = ord(i)
       e = e * 256 + d
     return hex(e)[2:]
+
+def factorial(n):
+    result = n
+    for i in range(1, n):
+        result *= i
+    return result
 
 def md5(string):
     return hashlib.md5(string.encode(encoding='utf-8')).hexdigest()
@@ -59,38 +64,9 @@ def CreateSalt(length=32):
     while len(IReturn) != 32:
         IReturn += chars[random.randint(0, len(chars) - 1)]
     return IReturn
-'''
-def PngBinHash(SkinPath):
-    Image = io.imread(SkinPath)
-    Height = Image.shape[0]
-    Width = Image.shape[1]
-    with BytesIO() as Buf:
-        Buf.write(struct.pack(">i", Width))
-        Buf.write(struct.pack(">i", Height))
-        for w in range(Width):
-            for h in range(Height):
-                dot = Image[h][w]
-                ImageInfo = {
-                    'R' : dot[0],
-                    'G' : dot[1],
-                    'B' : dot[2],
-                    'A' : dot[3],
-                }
-                Buf.write(struct.pack(">I", ImageInfo['A']))
-                if ImageInfo['A'] == 0x00:
-                    Buf.write(struct.pack(">I", 0x00))
-                    Buf.write(struct.pack(">I", 0x00))
-                    Buf.write(struct.pack(">I", 0x00))
-                    continue
-                else:
-                    Buf.write(struct.pack(">I", ImageInfo['R']))
-                    Buf.write(struct.pack(">I", ImageInfo['G']))
-                    Buf.write(struct.pack(">I", ImageInfo['B']))
 
-        return hashlib.sha256(Buf.getvalue()).hexdigest()
-'''
-base = [str(x) for x in range(10)] + [ chr(x) for x in range(ord('A'),ord('A')+6)]
 def dec2hex(num):
+    base = [str(x) for x in range(10)] + [chr(x) for x in range(ord('A'), ord('A') + 6)]
     l = []
     if num < 0:
         return '-' + dec2hex(abs(num))
@@ -103,7 +79,6 @@ def dec2hex(num):
 def PngBinHash(SkinPath):
     photo = Image.open(SkinPath)
     width, height = photo.size
-    print(photo.getpixel((2,0)))
     #return photo.getpixel((4, 4))
     with BytesIO() as Buf:
         #Buf.write(struct.pack(">I", width))
@@ -119,10 +94,6 @@ def PngBinHash(SkinPath):
                     Buf.write((0).to_bytes(1, "big"))
                     Buf.write((0).to_bytes(1, "big"))
                 else:
-                    if [2,0] == [w, h]:
-                        print(data)
-                    if [3,0] == [w, h]:
-                        print(data)
                     Buf.write(data[0].to_bytes(1, "big"))
                     Buf.write(data[1].to_bytes(1, "big"))
                     Buf.write(data[2].to_bytes(1, "big"))
@@ -163,9 +134,11 @@ if __name__ == "__main__":
     #print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
     #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
     #print(PngBinHash("./data/texture/texture-hash-test.png"))
-    import time
-    time_start = time.time()
-    with open("./faq.png", "wb") as f:
-        f.write(gethead_skin("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png"))
-    time_end = time.time()
-    print('totally cost',time_end-time_start)
+    #import time
+    #time_start = time.time()
+    #with open("./faq.png", "wb") as f:
+    #    f.write(gethead_skin("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png"))
+    #time_end = time.time()
+    #print('totally cost',time_end-time_start)
+    #print(PngBinHash("./data/texture/74349566b05e0d4db0705fe511851e119341538575648c369d9dd6fcf8c8623e.png"))
+    print(arrangeCoins(8))
