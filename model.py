@@ -1,19 +1,21 @@
-import peewee
+import base64
+import binascii
+import hashlib
+import json
+import os
 import time
+import uuid
 from datetime import datetime
 from time import strftime
-import base
-import os
-import simplejson
-import base64
-import uuid
-import rsa
-import binascii
-import password
-from OpenSSL.crypto import load_privatekey, FILETYPE_PEM, sign
-import hashlib
 
-config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
+import peewee
+import rsa
+from OpenSSL.crypto import FILETYPE_PEM, load_privatekey, sign
+
+import base
+import password
+
+config = base.Dict2Object(json.loads(open("./data/config.json").read()))
 
 db = {}
 db['global'] = peewee.__dict__[config.database.type](config.database.connect_info.global_db, **config.database.globalinfo)
@@ -160,7 +162,7 @@ def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, 
             unMetaData = False
         else:
             unMetaData = True
-    textures = simplejson.dumps(format_texture(profile, unMetaData))
+    textures = json.dumps(format_texture(profile, unMetaData))
     IReturn = {
         "id" : profile.profile_id,
         "name" : profile.name,
@@ -176,6 +178,25 @@ def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, 
             for i in range(len(IReturn['properties'])):
                 IReturn['properties'][i]['signature'] = sign_self(IReturn['properties'][i]['value'], "./data/rsa.pem")
     return IReturn
+
+def getprofile_id_name(profileid, name):
+    try:
+        result = profile.select().where((profile.name == name) & (profile.profile_id == profileid))
+    except profile.DoesNotExist:
+        return False
+    else:
+        return result
+
+def getalltoken(User):
+    token.user == User.uuid
+    try:
+        result = token.select().where(token.user == User.uuid)
+    except Exception as e:
+        if "tokenDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
 
 def NewToken(user, ClientToken=str(uuid.uuid4()).replace("-", "")):
     Token = token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=ClientToken, bind=user.selected, email=user.email)
@@ -246,9 +267,62 @@ def gettoken(AccessToken, ClientToken=None):
         else:
             return result
 
+def gettoken_strict(AccessToken, ClientToken=None):
+    try:
+        if ClientToken == None:
+            try:
+                result = token.get(token.accessToken == AccessToken)
+            except Exception as e:
+                if "tokenDoesNotExist" == e.__class__.__name__:
+                    return False
+        else:
+            try:
+                result = token.get((token.accessToken == AccessToken) & (token.clientToken == ClientToken))
+            except Exception as e:
+                if "tokenDoesNotExist" == e.__class__.__name__:
+                    return False
+    except Exception as e:
+        if "tokenDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        if result.status in [2,1]:
+            return False
+        else:
+            return result
+
+def getuser_uuid(uuid):
+    try:
+        result = user.get(user.uuid == uuid)
+    except Exception as e:
+        if "userDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
 def getprofile(name):
     try:
         result = profile.select().where(profile.name == name)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+    else:
+        return result
+
+def getprofile_uuid(uuid):
+    try:
+        result = profile.select().where(profile.uuid == uuid)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def getprofile_createby(by):
+    try:
+        result = profile.select().where(profile.createby == by)
     except Exception as e:
         if "profileDoesNotExist" == e.__class__.__name__:
             return False
@@ -259,6 +333,26 @@ def getprofile(name):
 def getprofile_id(pid):
     try:
         result = profile.select().where(profile.profile_id == pid)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def getprofile_uuid(uuid):
+    try:
+        result = profile.select().where(profile.uuid == uuid)
+    except Exception as e:
+        if "profileDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def getprofile_uuid_name(uuid, name):
+    try:
+        result = profile.select().where(profile.uuid == uuid, profile.name == name)
     except Exception as e:
         if "profileDoesNotExist" == e.__class__.__name__:
             return False

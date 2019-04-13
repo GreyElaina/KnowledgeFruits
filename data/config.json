@@ -27,14 +27,13 @@
     "TokenTime": {
         "RefrushTime": 5,
         "EnableTime": 3,
-        "TimeRange": 86400
+        "TimeRange": 60
     },
     "salt": "sX*h-b<.$&$vt8mzgS%9IE6nXe3EU|=`",
     "AdditionalParameters": {
         "debug": true,
-        "host": "0.0.0.0",
-        "port": "5001",
-        "threaded": true
+        "bind": "127.0.0.1:5001",
+        "loglevel": "debug"
     },
     "TexturePath": "./data/texture/",
     "HostUrl": "http://127.0.0.1:5001",
@@ -62,7 +61,23 @@
                 "max": 16
             },
             "isSigner": true
-        }
+        },
+        "UserPassword": {
+            "content": "^(?![0-9]+$)(?![a-zA-Z]+$)[0-9A-Za-z]",
+            "length": {
+                "min": 6,
+                "max": 21
+            },
+            "isSigner": true
+        },
+        "UserEmail": {
+            "content": "^([a-zA-Z0-9]+[_|\\_|\\.]?)*[a-zA-Z0-9]+@([a-zA-Z0-9]+[_|\\_|\\.]?)*[a-zA-Z0-9]+\\.[a-zA-Z]",
+            "length": {
+                "min": 2,
+                "max": 3
+            },
+            "isSigner": true
+        } 
     },
     "OAuth": {
         "github": {

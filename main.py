@@ -1,5 +1,6 @@
 import base64
 import datetime
+import json
 import os
 import re
 import time
@@ -11,22 +12,18 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import peewee
 import redis
 import requests
-import simplejson
 from flask import (Flask, Response, abort, redirect, render_template, request,
                    session, url_for)
 from flask.helpers import make_response
 from flask_apscheduler import APScheduler
-from flask_limiter import Limiter
-from flask_limiter.util import get_remote_address
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
-from werkzeug.exceptions import HTTPException, NotFound
+from werkzeug.exceptions import HTTPException
 
 import base
 import model
 import password
-
-config = base.Dict2Object(simplejson.loads(open("./data/config.json").read()))
-raw_config = simplejson.loads(open("./data/config.json").read())
+config = base.Dict2Object(json.loads(open("./data/config.json").read()))
+raw_config = json.loads(open("./data/config.json").read())
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
@@ -98,36 +95,31 @@ def ratelimit_handler(e):
 def notfound(e):
     return redirect(url_for('service_error', error="没有找到数据", errorMessage="请检查url是否正确.", status=404))
 '''
+
+@app.route("/api/knowledgefruits/serverinfo/yggdrasil")
 @app.route(config.const.base + '/', methods=['GET'])
 def index():
-    return Response(simplejson.dumps({
+    return Response(json.dumps({
         "meta" : config.YggdrasilIndexData,
         "skinDomains": config.SiteDomain if "SiteDomain" in config.__dict__ else [urlparse(request.url).netloc.split(":")[0]],
         "signaturePublickey": open(config.KeyPath.Public, 'r').read()
     }), mimetype='application/json; charset=utf-8')
 
 # /authserver
-
-#@limiter.exempt
-#@limiter.limit("1/second", error_errorMessage=Response(status=403))
 @app.route(config.const.base + '/authserver/authenticate', methods=['POST'])
 def authenticate():
     IReturn = {}
     if request.is_json:
         data = request.json
-        user = {}
-        try:
-            user = model.user.get(model.user.email==data['username'])
-        except Exception as e:
-            if "userDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
+        user = model.getuser(data['username'])
+        if not user:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         '''if user.permission == 0:
-            return Response(simplejson.dumps({
+            return Response(json.dumps({
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
@@ -139,7 +131,7 @@ def authenticate():
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid credentials. Invalid username or password."
             }
-            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
 
         SelectedProfile = {}
         AvailableProfiles = []
@@ -155,24 +147,14 @@ def authenticate():
                 ]
             except Exception as e:
                 if "profileDoesNotExist" == e.__class__.__name__:
-                    AvailableProfiles = []
+                    pass
 
-            try:
-                #print(model.profile.get(uuid=user.selected).name)
-                Profileresult = model.profile.select().where(model.profile.createby == user.uuid)
-                if len(Profileresult) != 1:
-                    SelectedProfile = model.format_profile(model.profile.get(uuid=user.selected), unsigned=True)
-                else:
-                    notDoubleProfile = True
-                    SelectedProfile = model.format_profile(Profileresult.get())
-            except Exception as e:
-                if "profileDoesNotExist" == e.__class__.__name__:
-                    SelectedProfile = {}
+            Profileresult = model.getprofile_createby(user.uuid)
+            if len(Profileresult) == 1:
+                notDoubleProfile = True
+                SelectedProfile = model.format_profile(Profileresult.get())
 
-            if notDoubleProfile:
-                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid, user=user.uuid)
-            else:
-                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, user=user.uuid)
+            Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid if notDoubleProfile else None, user=user.uuid)
             Token.save() # 颁发Token
 
             IReturn = {
@@ -192,8 +174,8 @@ def authenticate():
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid credentials. Invalid username or password."
             }
-            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const.base + '/authserver/refresh', methods=['POST'])
 def refresh():
@@ -202,72 +184,68 @@ def refresh():
         Can = False
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
-        try:
-            if 'clientToken' in data:
-                OldToken = model.token.get(accessToken=AccessToken, clientToken=ClientToken)
-            else:
-                OldToken = model.token.get(accessToken=AccessToken)
-        except Exception as e:
-            if "tokenDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
-
+        if 'clientToken' in data:
+            OldToken = model.gettoken_strict(AccessToken, ClientToken)
+        else:
+            OldToken = model.gettoken(AccessToken)
+        if not OldToken:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        
         if OldToken.status not in ["0", "1"]:
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid token."
             }
-            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        User = model.user.get(uuid=OldToken.user)
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        User = model.getuser_uuid(OldToken.user)
         '''if User.permission == 0:
-            return Response(simplejson.dumps({
+            return Response(json.dumps({
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
         TokenSelected = OldToken.bind
         if TokenSelected:
-            TokenProfile = model.profile.get(uuid=TokenSelected)
+            TokenProfile = model.getprofile_uuid(TokenSelected).get()
         else:
             TokenProfile = {}
         if 'selectedProfile' in data:
             PostProfile = data['selectedProfile']
             # 验证客户端提供的角色信息
-            try:
-                needuser = model.profile.get(profile_id=PostProfile['id'], name=PostProfile['name'])
-            except Exception as e:
-                if "profileDoesNotExist" == e.__class__.__name__:
-                    error = {
-                        'error' : "IllegalArgumentException",
-                        'errorMessage' : "Invalid token."
-                    }
-                    return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                    # 角色不存在.yggdrasil文档没有明确规定,故不填
-                #raise e
+            needuser = model.getprofile_id_name(PostProfile['id'], PostProfile['name'])
+            if not needuser:
+                error = {
+                    'error' : "IllegalArgumentException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                # 角色不存在.yggdrasil文档没有明确规定,故不填
+            #raise e
             else:
+                needuser = needuser.get()
                 # 验证完毕,有该角色.
                 # 试图向一个已经绑定了角色的令牌指定其要绑定的角色
-                if TokenSelected:
+                if TokenSelected: # 如果令牌本来就绑定了角色
                     error = {
                         'error' : 'IllegalArgumentException',
                         'errorMessage' : "Access token already has a profile assigned."
                     }
-                    return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                if OldToken.bind:
+                    return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                if OldToken.bind: # 如果令牌本来就绑定了角色
                     error = {
                         'error' : 'IllegalArgumentException',
                         'errorMessage' : "Access token already has a profile assigned."
                     }
-                    return Response(simplejson.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                if needuser.createby != OldToken.user:
+                    return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                if needuser.createby != OldToken.user: # 如果角色不属于用户
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Attempting to bind a token to a role that does not belong to its corresponding user."
                     }
-                    return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
                 TokenSelected = model.findprofilebyid(PostProfile['id']).uuid
                 Can = True
 
@@ -286,7 +264,7 @@ def refresh():
         if 'requestUser' in data:
             if data['requestUser']:
                 IReturn['user'] = model.format_user(User)
-        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const.base + "/authserver/validate", methods=['POST'])
 def validate():
@@ -294,23 +272,20 @@ def validate():
         data = request.json
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if "clientToken" in data else None
-        try:
-            if not ClientToken:
-                result = model.token.get(model.token.accessToken == AccessToken)
-            else:
-                result = model.token.get(model.token.accessToken == AccessToken, model.token.clientToken == ClientToken)
-        except Exception as e:
-            if "tokenDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
+        if not ClientToken:
+            result = model.gettoken_strict(AccessToken)
         else:
-            #User = model.user.get(email=result.email)
+            result = model.gettoken_strict(AccessToken, ClientToken)
+        if not result:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        else:
+            result = result.get()
             '''if User.permission == 0:
-                return Response(simplejson.dumps({
+                return Response(json.dumps({
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
                 }), status=403, mimetype='application/json; charset=utf-8')'''
@@ -322,7 +297,7 @@ def validate():
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
                 }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
                 return Response(status=204)
 
@@ -332,37 +307,21 @@ def invalidate():
         data = request.json
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if "clientToken" in data else None
-        try:
-            if ClientToken == None:
-                try:
-                    result = model.token.get(model.token.accessToken == AccessToken)
-                except Exception as e:
-                    if "tokenDoesNotExist" == e.__class__.__name__:
-                        return Response(status=204)
-            else:
-                try:
-                    result = model.token.get(model.token.accessToken == AccessToken & model.token.clientToken == ClientToken)
-                except Exception as e:
-                    if "tokenDoesNotExist" == e.__class__.__name__:
-                        result = model.token.get(model.token.accessToken == AccessToken)
-        except Exception as e:
-            if "tokenDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-                #return Response(status=204)
-            raise e
+        
+        if ClientToken == None:
+            result = model.gettoken(AccessToken)
+            if not result:
+                return Response(status=204)
         else:
-            #User = model.user.get(email=result.email)
-            '''if User.permission == 0:
-                return Response(simplejson.dumps({
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
-                }), status=403, mimetype='application/json; charset=utf-8')'''
-            result.delete_instance()
-            return Response(status=204)
+            result = model.gettoken(AccessToken, ClientToken)
+        #User = model.user.get(email=result.email)
+        '''if User.permission == 0:
+            return Response(simplejson.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+            }), status=403, mimetype='application/json; charset=utf-8')'''
+        result.delete_instance()
+        return Response(status=204)
 
 #@limit
 @app.route(config.const.base + '/authserver/signout', methods=['POST'])
@@ -371,19 +330,16 @@ def signout():
         data = request.json
         email = data['username']
         passwd = data['password']
-        try:
-            result = model.user.get(model.user.email == email)
-        except Exception as e:
-            if "userDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
+        result = model.getuser(email)
+        if not result:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid credentials. Invalid username or password."
+            }
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         else:
             '''if result.permission == 0:
-                return Response(simplejson.dumps({
+                return Response(json.dumps({
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }), status=403, mimetype='application/json; charset=utf-8')'''
@@ -395,26 +351,19 @@ def signout():
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
-                try:
-                    model.token.delete().where(model.token.user == result.uuid).execute()
-                except Exception as e:
-                    if "userDoesNotExist" == e.__class__.__name__:
-                        error = {
-                            'error' : "ForbiddenOperationException",
-                            'errorMessage' : "Invalid credentials. Invalid username or password."
-                        }
-                        return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-                    raise e
-                else:
-                    return Response(status=204)
+                result = model.getalltoken(result)
+                if result:
+                    for i in result:
+                        i.delete_instance()
+                return Response(status=204)
             else:
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
 
 # /authserver
 
@@ -428,7 +377,6 @@ def joinserver():
         data = request.json
         AccessToken = data['accessToken']
         ClientToken = data['clientToken'] if "clientToken" in data else None
-
         TokenValidate = model.is_validate(AccessToken, ClientToken)
         
         if TokenValidate:
@@ -436,26 +384,17 @@ def joinserver():
             # uuid = token.bind
             token = model.gettoken(AccessToken, ClientToken)
             if token.bind:
-                try:
-                    result = model.profile.get(uuid=token.bind)
-                except Exception as e:
-                    if "profileDoesNotExist" == e.__class__.__name__:
-                        return Response(status=404)
-                    raise e
+                result = model.getprofile_uuid(token.bind)
+                if not result:
+                    return Response(status=404)
             else:
-                return Response(simplejson.dumps({
+                return Response(json.dumps({
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
+            result = result.get()
             playeruuid = model.profile.get(name=result.name).profile_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
-                #sj = model.ms_serverjoin(
-                #    AccessToken=AccessToken,
-                #    SelectedProfile=data['selectedProfile'],
-                #    ServerID=data['serverId'],
-                #    RemoteIP=request.remote_addr
-                #)
-                #sj.save()
                 cache_redis.hmset(data['serverId'], {
                     "accessToken": AccessToken,
                     "selectedProfile": data['selectedProfile'],
@@ -464,12 +403,12 @@ def joinserver():
                 cache_redis.expire(data['serverId'], config.ServerIDOutTime)
                 return Response(status=204)
             else:
-                return Response(simplejson.dumps({
+                return Response(json.dumps({
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
         else:
-            return Response(simplejson.dumps({
+            return Response(json.dumps({
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
@@ -485,17 +424,17 @@ def PlayerHasJoined():
     Data = {i.decode(): Data[i].decode() for i in Data.keys()}
     if not Data:
         return Response(status=204)
-    try:
-        TokenInfo = model.token.get(accessToken=Data['accessToken'])
-        ProfileInfo = model.profile.get(uuid=TokenInfo.bind, name=PlayerName)
-    except Exception as e:
-        if "DoesNotExist" in e.__class__.__name__:
-            return Response(status=204)
-        raise e
+    TokenInfo = model.gettoken(Data['accessToken'])
+    ProfileInfo = model.getprofile_uuid_name(TokenInfo.bind, name=PlayerName)
+    if not TokenInfo or not ProfileInfo:
+        return Response(status=204)
+
+    TokenInfo = TokenInfo.get()
+    ProfileInfo = ProfileInfo.get()
 
     Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == Data['remoteIP']][bool(RemoteIP)]
     if Successful:
-        result = simplejson.dumps(model.format_profile(
+        result = json.dumps(model.format_profile(
             ProfileInfo,
             Properties=True,
             unsigned=False,
@@ -509,69 +448,33 @@ def PlayerHasJoined():
 @app.route(config.const.base + '/sessionserver/session/minecraft/profile/<getuuid>', methods=['GET'])
 def searchprofile(getuuid):
     args = request.args
-    signed = False
-    IReturn = {}
-    if 'unsigned' in args:
-        signed = True if args['unsigned'] == 'true' else False
-        #signed = False if args['unsigned'] == 'false' else True
-        if args['unsigned'] == 'false':
-            try:
-                result = model.profile.get(profile_id=getuuid)
-                IReturn = model.format_profile(
-                    #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
-                    result,
-                    Properties=True,
-                    unsigned=False,
-                    unMetaData=[True, False][model.getskintype_profile(result) == "SKIN" and model.getskinmodel_profile(result) == "ALEX"]
-                )
-            except Exception as e:
-                if "DoesNotExist" in e.__class__.__name__:
-                    return Response(status=204)
-                raise e
-            return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
-        if args['unsigned'] == 'true':
-            try:
-                result = model.profile.get(profile_id=getuuid)
-                IReturn = model.format_profile(
-                    #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
-                    result,
-                    Properties=True,
-                    unsigned=True,
-                    unMetaData=[True, False][model.getskintype_profile(result) == "SKIN" and model.getskinmodel_profile(result) == "ALEX"]
-                )
-            except Exception as e:
-                if "DoesNotExist" in e.__class__.__name__:
-                    return Response(status=204)
-                raise e
-            return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+    result = model.getprofile_id(getuuid)
+    if not result:
+        return Response(status=204)
     else:
-        try:
-            result = model.profile.get(profile_id=getuuid)
-            IReturn = model.format_profile(
-                #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
-                result,
-                Properties=True,
-                unsigned=True,
-                unMetaData=[True, False][model.getskintype_profile(result) == "SKIN" and model.getskinmodel_profile(result) == "ALEX"]
-            )
-        except Exception as e:
-            if "DoesNotExist" in e.__class__.__name__:
-                return Response(status=204)
-            raise e
-        return Response(response=simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+        result = result.get()
+    IReturn = model.format_profile(
+        #model.user.get(model.user.playername == model.profile.get(profile_id=getuuid).name),
+        result,
+        Properties=True,
+        unsigned={"false": False, "true": True, None: True}[args.get('unsigned')],
+        BetterData=True
+    )
+    return Response(response=json.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const.base + '/api/profiles/minecraft', methods=['POST'])
 def searchmanyprofile():
     if request.is_json:
         data = list(set(list(request.json)))
-        IReturn = list()
+        IReturn = []
         for i in range(config.ProfileSearch.MaxAmount - 1):
             try:
-                IReturn.append(model.format_profile(model.profile.select().where(model.profile.name==data[i]).get(), unsigned=True))
-            except Exception as e:
-                if "DoesNotExist" in e.__class__.__name__:
-                    continue
-        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+                IReturn.append(model.format_profile(model.profile.get(model.profile.name==data[i]), unsigned=True))
+            except model.profile.DoesNotExist:
+                continue
+            except IndexError:
+                pass
+        return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
     return Response(status=404)
 
 # /sessionserver
@@ -579,9 +482,11 @@ def searchmanyprofile():
 #####################
 
 # /api/knowledgefruits/
-@app.route("/api/knowledgefruits/", methods=['GET', 'POST'])
+@app.route("/api/knowledgefruits/serverinfo/knowledgefruits")
+@app.route("/api/knowledgefruits/serverinfo")
+@app.route("/api/knowledgefruits/")
 def serverinfo():
-    return Response(simplejson.dumps({
+    return Response(json.dumps({
         "Yggdrasil" : {
             "BaseUrl" : config.const.base
         },
@@ -598,8 +503,8 @@ def serverinfo():
         "TokenTime": raw_config['TokenTime']
     }), mimetype='application/json; charset=utf-8')
 
-@app.route("/api/knowledgefruits/login/randomkey", methods=['POST'])
-def kf_login_randomkey():
+@app.route("/api/knowledgefruits/authenticate/security", methods=['POST'])
+def kf_randomkey():
     if request.is_json:
         data = request.json
         Randomkey = password.CreateSalt(length=8)
@@ -612,14 +517,14 @@ def kf_login_randomkey():
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             raise e
         if not user_result:
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid credentials. Invalid username or password."
             }
-            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         salt = user_result.passwordsalt
         if user_result:
             IReturn = {
@@ -636,11 +541,11 @@ def kf_login_randomkey():
                 "authId" : authid
             })
             cache_redis.expire(authid, 30)
-            return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+            return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
         else:
             return Response(status=403)
 
-@app.route("/api/knowledgefruits/login/randomkey/verify", methods=['POST'])
+@app.route("/api/knowledgefruits/authenticate/security/verify", methods=['POST'])
 def kf_login_verify():
     if request.is_json:
         data = request.json
@@ -660,19 +565,33 @@ def kf_login_verify():
                         "clientToken" : Token.clientToken
                     }
                     cache_redis.delete(data['authId'])
-                    return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
+                    return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
                 else:
                     cache_redis.delete(data['authId'])
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Invalid credentials. Invalid username or password."
                     }
-                    return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
                 cache_redis.delete(data['authId'])
                 return Response(status=403)
 
-@app.route("/api/knowledgefruits/user/changepassword/<username>", methods=['POST'])
+@app.route("/api/knowledgefruits/authenticate/password/test", methods=['POST'])
+def kf_passwd_test():
+    if not re.match(base.StitchExpression(config.reMatch.UserPassword), request.data.decode()):
+        return Response(status=400)
+    else:
+        return Response(status=204)
+
+@app.route("/api/knowledgefruits/authenticate/email/test", methods=['POST'])
+def kf_email_test():
+    if not re.match(base.StitchExpression(config.reMatch.UserEmail), request.data.decode()):
+        return Response(status=400)
+    else:
+        return Response(status=204)
+
+@app.route("/api/knowledgefruits/authenticate/password/change/<username>", methods=['POST'])
 def kf_user_changepasswd(username):
     if request.is_json:
         data = request.json
@@ -704,21 +623,21 @@ def kf_user_changepasswd(username):
                 model.token.delete().where(model.token.email == user.email).execute()
                 return Response(status=204)
             else:
-                return Response(simplejson.dumps({
+                return Response(json.dumps({
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
         else:
-            return Response(simplejson.dumps({
+            return Response(json.dumps({
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
             }), status=403, mimetype="application/json; charset=utf-8")
 
-@app.route("/api/knowledgefruits/textures/info/<path:args>")
+@app.route("/api/knowledgefruits/search/textures/<path:args>")
 def kf_texturesinfo(args):
     if (len(args.split("/")) % 2) != 0:
-        return Response(simplejson.dumps({
-            "err": "WrongArgs",
+        return Response(json.dumps({
+            "error": "WrongArgs",
             "errorMessage": "参数格式错误"
         }), mimetype='application/json; charset=utf-8', status=403)
     Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
@@ -726,20 +645,20 @@ def kf_texturesinfo(args):
     for i in [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
         content = content & i
     try:
-        return Response(simplejson.dumps([
+        return Response(json.dumps([
             model.kf_format_textures(i) for i in model.findtextures(content)
         ]), mimetype='application/json; charset=utf-8')
     except KeyError as e:
-        return Response(simplejson.dumps({
-            "err": "WrongArgs",
+        return Response(json.dumps({
+            "error": "WrongArgs",
             "errorMessage": "预料之外的参数传入"
         }), mimetype='application/json; charset=utf-8', status=403)
 
-@app.route("/api/knowledgefruits/profile/info/<path:args>")
+@app.route("/api/knowledgefruits/search/profiles/<path:args>")
 def kf_profileinfo(args):
     if (len(args.split("/")) % 2) != 0:
-        return Response(simplejson.dumps({
-            "err": "WrongArgs",
+        return Response(json.dumps({
+            "error": "WrongArgs",
             "errorMessage": "参数格式错误"
         }), mimetype='application/json; charset=utf-8', status=403)
     Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
@@ -747,91 +666,171 @@ def kf_profileinfo(args):
     for i in [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
         content = content & i
     try:
-        return Response(simplejson.dumps([
+        return Response(json.dumps([
             model.kf_format_profile(i) for i in model.findprofile(content)
         ]), mimetype='application/json; charset=utf-8')
     except KeyError as e:
-        return Response(simplejson.dumps({
-            "err": "WrongArgs",
+        return Response(json.dumps({
+            "error": "WrongArgs",
             "errorMessage": "预料之外的参数传入"
         }), mimetype='application/json; charset=utf-8', status=403)
 
-@app.route('/api/knowledgefruits/mixins/authserver/authenticate/noprofile', methods=['POST'])
-def authenticate_mixined():
-    IReturn = {}
-    if request.is_json:
-        data = request.json
-        user = {}
-        try:
-            user = model.user.get(model.user.email==data['username'])
-        except Exception as e:
-            if "userDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }
-                return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
-        '''if user.permission == 0:
-            return Response(simplejson.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
-            }), status=403, mimetype='application/json; charset=utf-8')'''
-        if not cache_redis.get(".".join(['lock', user.email])):
-            cache_redis.setnx(".".join(['lock', user.email]), "locked")
-            cache_redis.expire(".".join(['lock', user.email]), config.AuthLimit)
-        else:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-
-        if password.crypt(data['password'], user.passwordsalt) == user.password:
-            # 登录成功.
-            ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
-            AccessToken = str(uuid.uuid4()).replace("-","")
-            notDoubleProfile = False
-
-            try:
-                #print(model.profile.get(uuid=user.selected).name)
-                Profileresult = model.profile.select().where(model.profile.createby == user.uuid)
-                if len(Profileresult) == 1:
-                    notDoubleProfile = True
-            except Exception as e:
-                if "profileDoesNotExist" == e.__class__.__name__:
-                    pass
-
-            if notDoubleProfile:
-                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid, user=user.uuid)
-            else:
-                Token = model.token(accessToken=AccessToken, clientToken=ClientToken, user=user.uuid)
-            Token.save()
-
-            IReturn = {
-                "accessToken" : AccessToken,
-                "clientToken" : ClientToken
-            }
-            if "requestUser" in data:
-                if data['requestUser']:
-                    IReturn['user'] = model.format_user(user)
-        else:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(simplejson.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        return Response(simplejson.dumps(IReturn), mimetype='application/json; charset=utf-8')
-
-@app.route("/api/knowledgefruits/useruuid/email/<email>")
+@app.route("/api/knowledgefruits/search/id/user/<email>")
 def kf_search_user_email(email):
     result = model.getuser(email)
     if not result:
-        return Response(simplejson.dumps({
+        return Response(json.dumps({
             "error": "WrongArgs",
             "errorMessage": "错误的参数"
         }), mimetype='application/json; charset=utf-8', status=403)
-    return Response(simplejson.dumps({"uuid": result.uuid}), mimetype='application/json; charset=utf-8')
+    return Response(json.dumps({"uuid": result.uuid}), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/authenticate/simple/refrush", methods=['GET', "POST"])
+def kf_authenticate_simple_refrush():
+    if request.is_json:
+        data = request.json
+        AccessToken = data['accessToken']
+        ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
+        try:
+            if 'clientToken' in data:
+                OldToken = model.token.get(accessToken=AccessToken, clientToken=ClientToken)
+            else:
+                OldToken = model.token.get(accessToken=AccessToken)
+        except Exception as e:
+            if "tokenDoesNotExist" == e.__class__.__name__:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise e
+
+        if OldToken.status not in ["0", "1"]:
+            error = {
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }
+            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+        User = model.user.get(uuid=OldToken.user)
+
+        NewToken = model.token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, user=OldToken.user, bind=TokenSelected)
+        NewToken.save()
+        OldToken.delete_instance()
+        IReturn = {
+            "accessToken" : NewToken.accessToken,
+            'clientToken' : OldToken.clientToken,
+            #'selectedProfile' : {}
+        }
+        return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/simple/authserver/validate", methods=['POST'])
+def kf_validate():
+    if request.is_json:
+        data = request.json
+        AccessToken = data['accessToken']
+        ClientToken = data['clientToken'] if "clientToken" in data else None
+        try:
+            if not ClientToken:
+                result = model.token.get(model.token.accessToken == AccessToken)
+            else:
+                result = model.token.get(model.token.accessToken == AccessToken, model.token.clientToken == ClientToken)
+        except Exception as e:
+            if "tokenDoesNotExist" == e.__class__.__name__:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise e
+        else:
+            #User = model.user.get(email=result.email)
+            '''if User.permission == 0:
+                return Response(json.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
+                }), status=403, mimetype='application/json; charset=utf-8')'''
+
+            if result.status in ["2", "1"]:
+                if result.status == "2":
+                    result.delete_instance()
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            else:
+                return Response(status=204)
+
+@app.route("/api/knowledgefruits/simple/authserver/invalidate", methods=['POST'])
+def kf_invalidate():
+    if request.is_json:
+        data = request.json
+        AccessToken = data['accessToken']
+        ClientToken = data['clientToken'] if "clientToken" in data else None
+        try:
+            if ClientToken == None:
+                try:
+                    result = model.token.get(model.token.accessToken == AccessToken)
+                except Exception as e:
+                    if "tokenDoesNotExist" == e.__class__.__name__:
+                        return Response(status=204)
+            else:
+                try:
+                    result = model.token.get(model.token.accessToken == AccessToken & model.token.clientToken == ClientToken)
+                except Exception as e:
+                    if "tokenDoesNotExist" == e.__class__.__name__:
+                        result = model.token.get(model.token.accessToken == AccessToken)
+        except Exception as e:
+            if "tokenDoesNotExist" == e.__class__.__name__:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise e
+        else:
+            result.delete_instance()
+            return Response(status=204)
+
+#@limit
+@app.route('/api/knowledgefruits/authenticate/security/signout/verify', methods=['POST'])
+def kf_signout():
+    if request.is_json:
+        data = request.json
+        Data = cache_redis.hgetall(data['authId'])
+        Data = {i.decode(): Data[i].decode() for i in Data.keys()}
+        if cache_redis.get(".".join(['lock', user_result.email])):
+            return Response(status=403)
+        if not Data:
+            return Response(status=403)
+        else:
+            user_result = model.getuser(Data['username'])
+            if user_result:
+                if not cache_redis.get(".".join(['lock', user_result.email])):
+                    cache_redis.setnx(".".join(['lock', user_result.email]), "locked")
+                    cache_redis.expire(".".join(['lock', user_result.email]), config.AuthLimit)
+                else:
+                    error = {
+                        'error' : "ForbiddenOperationException",
+                        'errorMessage' : "Invalid credentials. Invalid username or password."
+                    }
+                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                AuthRequest = password.crypt(user_result.password, Data['HashKey'])
+                if AuthRequest == data['Password']:
+                    model.token.delete().where(model.token.user == user_result.uuid).execute()
+                else:
+                    cache_redis.delete(data['authId'])
+                    error = {
+                        'error' : "ForbiddenOperationException",
+                        'errorMessage' : "Invalid credentials. Invalid username or password."
+                    }
+                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            else:
+                cache_redis.delete(data['authId'])
+                return Response(json.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid credentials. Invalid username or password."
+                }), status=403)
 
 #####################
 @app.route("/texture/<image>", methods=['GET'])
@@ -840,15 +839,7 @@ def imageview(image):
         with open(os.getcwd() + "/data/texture/" + image + '.png', "rb") as f:
             image = f.read()
     except FileNotFoundError:
-        raise NotFound(
-            description="SkinNotFound",
-            response=Response(simplejson.dumps(
-                {
-                    "error" : "Not Found",
-                    'errorMessage' : "无法找到相应文件."
-                }
-            ), mimetype='application/json; charset=utf-8', status=404)
-        )
+        return Response(status=404)
     return Response(image, mimetype='image/png')
 
 @app.route("/texture/<image>/head", methods=['GET'])
@@ -863,20 +854,14 @@ def imageview_head(image):
                 status=404)
             )
         if texture.type != "SKIN":
-            return redirect(url_for('service_error',
+            return Response(json.dumps(dict(
                 error="皮肤请求类型错误",
                 errorMessage="无法抓取该类型皮肤文件的head部分",
-                status=403
-            ))
+            )), status=403)
         image = base.gethead_skin(filename)
     except FileNotFoundError:
-        return redirect(url_for('service_error',
-            error="Not Found",
-            errorMessage="无法找到相应文件.",
-            status=404)
-        )
+        return Response(status=404)
     return Response(image, mimetype='image/png')
-
 
 if __name__ == '__main__':
     if FileExists('./data/global.db'):
@@ -889,4 +874,7 @@ if __name__ == '__main__':
         with open(config.KeyPath.Public, 'wb') as f:
             f.write(public.save_pkcs1())
     app.wsgi_app = LighttpdCGIRootFix(app.wsgi_app)
-    app.run(**config.AdditionalParameters)
+    from paste.translogger import TransLogger
+    import waitress
+    import paste
+    waitress.serve(TransLogger(app, setup_console_handler=False), host='0.0.0.0', port=5001)
