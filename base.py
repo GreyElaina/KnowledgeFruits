@@ -141,4 +141,4 @@ if __name__ == "__main__":
     #time_end = time.time()
     #print('totally cost',time_end-time_start)
     #print(PngBinHash("./data/texture/74349566b05e0d4db0705fe511851e119341538575648c369d9dd6fcf8c8623e.png"))
-    print(arrangeCoins(8))
+    pass

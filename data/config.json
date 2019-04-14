@@ -7,8 +7,7 @@
     "database": {
         "type": "SqliteDatabase",
         "connect_info": {
-            "global_db": "./data/global.db",
-            "cache": "./data/cache.db"
+            "global_db": "./data/global.db"
         },
         "globalinfo": {},
         "other": {
@@ -18,12 +17,6 @@
     },
     "AuthLimit": 1,
     "ServerIDOutTime": 30,
-    "redis": {
-        "host": "127.0.0.1",
-        "port": 6379,
-        "password": "",
-        "db": 0
-    },
     "TokenTime": {
         "RefrushTime": 5,
         "EnableTime": 3,
@@ -37,10 +30,6 @@
     },
     "TexturePath": "./data/texture/",
     "HostUrl": "http://127.0.0.1:5001",
-    "ScavengerSetting": {
-        "CheckStatus": 1,
-        "DeleteDisabled": 2
-    },
     "ProfileSearch": {
         "MaxAmount": 8
     },

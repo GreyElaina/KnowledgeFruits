@@ -10,18 +10,19 @@ from os.path import exists as FileExists
 from urllib.parse import parse_qs, urlencode, urlparse
 
 import peewee
-import redis
 import requests
 from flask import (Flask, Response, abort, redirect, render_template, request,
                    session, url_for)
 from flask.helpers import make_response
-from flask_apscheduler import APScheduler
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
 from werkzeug.exceptions import HTTPException
+import cacheout
 
 import base
 import model
 import password
+import searchcache
+
 config = base.Dict2Object(json.loads(open("./data/config.json").read()))
 raw_config = json.loads(open("./data/config.json").read())
 
@@ -29,63 +30,13 @@ app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
 #app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
-cache_redis = redis.Redis(**raw_config['redis'])
 
+cache = cacheout.Cache(ttl=0)
+Token = searchcache.TokenCache(cache)
 class FlaskConfig(object):
-    JOBS = [
-        {
-            'id': 'ChangeStatus',
-            'func': 'main:CheckTokenStatus',
-            'args': (),
-            'trigger': 'interval',
-            'minutes' : config.ScavengerSetting.CheckStatus
-        },
-        {
-            'id': 'ClearDisabledTokens',
-            'func': 'main:DeleteDisabledToken',
-            'args': (),
-            'trigger': 'interval',
-            'minutes' : config.ScavengerSetting.DeleteDisabled
-        },
-    ]
-
     SCHEDULER_API_ENABLED = True
 
-def OutTime(token):
-    '''
-    token.status = \
-        1 if not config.TokenOutTime['canUse'](time.time() - time.mktime(token.setuptime.timetuple())) else\
-        2 if not config.TokenOutTime['NeedF5'](time.time() - time.mktime(token.setuptime.timetuple())) else\
-        0
-    '''
-    Enable = lambda time: time <= (config.TokenTime.TimeRange * config.TokenTime.EnableTime)
-    Refrush = lambda time: time <= (config.TokenTime.TimeRange * config.TokenTime.RefrushTime) and time >= (config.TokenTime.TimeRange * config.TokenTime.EnableTime)
-    if Enable(time.time() - time.mktime(token.setuptime.timetuple())):
-        token.status = 0
-    elif Refrush(time.time() - time.mktime(token.setuptime.timetuple())):
-        token.status = 1
-    else:
-        token.status = 2
-    token.save()
-    # 0:可以进行操作
-    # 1:只能刷新
-    # 2:已经失效,无法执行任何操作
-
-def CheckTokenStatus():
-    for i in model.token.select().where(model.token.status == 0 | model.token.status == 1):
-        OutTime(i)
-
-def DeleteDisabledToken():
-    # 删除失效Token(token.status == 2)
-    model.token.delete().where(model.token.status == 2).execute()
-
 app.config.from_object(FlaskConfig())
-crontab = APScheduler()
-crontab.init_app(app)
-crontab.start()
-cache = {
-    'Login_randomkeys' : {}
-}
 
 @app.errorhandler(429)
 def ratelimit_handler(e):
@@ -123,9 +74,8 @@ def authenticate():
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
-        if not cache_redis.get(".".join(['lock', user.email])):
-            cache_redis.setnx(".".join(['lock', user.email]), "locked")
-            cache_redis.expire(".".join(['lock', user.email]), config.AuthLimit)
+        if not cache.get(".".join(['lock', user.email])):
+            cache.set(".".join(['lock', user.email]), "LOCKED", ttl=config.AuthLimit)
         else:
             error = {
                 'error' : "ForbiddenOperationException",
@@ -154,8 +104,12 @@ def authenticate():
                 notDoubleProfile = True
                 SelectedProfile = model.format_profile(Profileresult.get())
 
-            Token = model.token(accessToken=AccessToken, clientToken=ClientToken, bind=Profileresult.get().uuid if notDoubleProfile else None, user=user.uuid)
-            Token.save() # 颁发Token
+            cache.set(".".join(["token", AccessToken]), {
+                "clientToken": ClientToken,
+                "bind": Profileresult.get().uuid if notDoubleProfile else None,
+                "user": user.uuid,
+                "createTime": int(time.time())
+            }, ttl=config.TokenTime.RefrushTime)
 
             IReturn = {
                 "accessToken" : AccessToken,
@@ -182,12 +136,13 @@ def refresh():
     if request.is_json:
         data = request.json
         Can = False
-        AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
+        AccessToken = data.get('accessToken')
+        ClientToken = data.get("clientToken", str(uuid.uuid4()).replace("-", ""))
+        IReturn = {}
         if 'clientToken' in data:
-            OldToken = model.gettoken_strict(AccessToken, ClientToken)
+            OldToken = Token.gettoken_strict(AccessToken, data.get("clientToken"))
         else:
-            OldToken = model.gettoken(AccessToken)
+            OldToken = Token.gettoken_strict(AccessToken)
         if not OldToken:
             error = {
                 'error' : "ForbiddenOperationException",
@@ -195,87 +150,74 @@ def refresh():
             }
             return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         
-        if OldToken.status not in ["0", "1"]:
+        if int(time.time()) >= OldToken.get("createTime") + config.TokenTime.RefrushTime:
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid token."
             }
             return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        User = model.getuser_uuid(OldToken.user)
-        '''if User.permission == 0:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
-            }), status=403, mimetype='application/json; charset=utf-8')'''
-        TokenSelected = OldToken.bind
+        User = model.getuser_uuid(OldToken.get("user"))
+        TokenSelected = OldToken.get("bind")
         if TokenSelected:
             TokenProfile = model.getprofile_uuid(TokenSelected).get()
         else:
             TokenProfile = {}
         if 'selectedProfile' in data:
             PostProfile = data['selectedProfile']
-            # 验证客户端提供的角色信息
             needuser = model.getprofile_id_name(PostProfile['id'], PostProfile['name'])
-            if not needuser:
+            if not needuser: # 验证客户端提供的角色信息
                 error = {
                     'error' : "IllegalArgumentException",
                     'errorMessage' : "Invalid token."
                 }
                 return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                # 角色不存在.yggdrasil文档没有明确规定,故不填
-            #raise e
+                # 角色不存在.
             else:
                 needuser = needuser.get()
                 # 验证完毕,有该角色.
-                # 试图向一个已经绑定了角色的令牌指定其要绑定的角色
-                if TokenSelected: # 如果令牌本来就绑定了角色
+                if OldToken.get('bind'): # 如果令牌本来就绑定了角色
                     error = {
                         'error' : 'IllegalArgumentException',
                         'errorMessage' : "Access token already has a profile assigned."
                     }
                     return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                if OldToken.bind: # 如果令牌本来就绑定了角色
-                    error = {
-                        'error' : 'IllegalArgumentException',
-                        'errorMessage' : "Access token already has a profile assigned."
-                    }
-                    return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
-                if needuser.createby != OldToken.user: # 如果角色不属于用户
+                if needuser.createby != OldToken.get("user"): # 如果角色不属于用户
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Attempting to bind a token to a role that does not belong to its corresponding user."
                     }
                     return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
                 TokenSelected = model.findprofilebyid(PostProfile['id']).uuid
+                IReturn['selectedProfile'] = model.format_profile(model.findprofilebyid(PostProfile['id']), unsigned=True)
                 Can = True
 
-        NewToken = model.token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, user=OldToken.user, bind=TokenSelected)
-        NewToken.save()
-        OldToken.delete_instance()
-        IReturn = {
-            "accessToken" : NewToken.accessToken,
-            'clientToken' : OldToken.clientToken,
-            #'selectedProfile' : {}
-        }
-        if TokenProfile:
+        NewAccessToken = str(uuid.uuid4()).replace('-', '')
+        cache.set(".".join(["token", NewAccessToken]), {
+            "clientToken": OldToken.get('clientToken'),
+            "bind": TokenSelected,
+            "user": OldToken.get("user"),
+            "createTime": int(time.time())
+        }, ttl=config.TokenTime.RefrushTime)
+
+        cache.delete(".".join(["token", AccessToken]))
+        IReturn['accessToken'] = NewAccessToken
+        IReturn['clientToken'] = OldToken.get('clientToken')
+        if TokenProfile and not Can:
             IReturn['selectedProfile'] = model.format_profile(TokenProfile, unsigned=True)
-        if Can:
-            IReturn['selectedProfile'] = model.format_profile(model.findprofilebyid(PostProfile['id']), unsigned=True)
         if 'requestUser' in data:
             if data['requestUser']:
                 IReturn['user'] = model.format_user(User)
         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
+
+#查看令牌状态
 @app.route(config.const.base + "/authserver/validate", methods=['POST'])
 def validate():
     if request.is_json:
         data = request.json
         AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if "clientToken" in data else None
-        if not ClientToken:
-            result = model.gettoken_strict(AccessToken)
-        else:
-            result = model.gettoken_strict(AccessToken, ClientToken)
+        ClientToken = data.get("clientToken")
+        result = Token.gettoken_strict(AccessToken, ClientToken)
         if not result:
             error = {
                 'error' : "ForbiddenOperationException",
@@ -283,16 +225,7 @@ def validate():
             }
             return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         else:
-            result = result.get()
-            '''if User.permission == 0:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
-                }), status=403, mimetype='application/json; charset=utf-8')'''
-
-            if result.status in ["2", "1"]:
-                if result.status == "2":
-                    result.delete_instance()
+            if Token.is_validate_strict(AccessToken, ClientToken):
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
@@ -306,21 +239,24 @@ def invalidate():
     if request.is_json:
         data = request.json
         AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if "clientToken" in data else None
-        
-        if ClientToken == None:
-            result = model.gettoken(AccessToken)
-            if not result:
-                return Response(status=204)
+        ClientToken = data.get("clientToken")
+
+        result = Token.gettoken(AccessToken, ClientToken)
+        if result:
+            cache.delete(".".join(['token', AccessToken]))
         else:
-            result = model.gettoken(AccessToken, ClientToken)
+            if ClientToken:
+                error = {
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }
+                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         #User = model.user.get(email=result.email)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
-        result.delete_instance()
         return Response(status=204)
 
 #@limit
@@ -343,9 +279,8 @@ def signout():
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }), status=403, mimetype='application/json; charset=utf-8')'''
-            if not cache_redis.get(".".join(['lock', result.email])):
-                cache_redis.setnx(".".join(['lock', result.email]), "locked")
-                cache_redis.expire(".".join(['lock', result.email]), config.AuthLimit)
+            if not cache.get(".".join(['lock', result.email])):
+                cache.set(".".join(['lock', result.email]), "LOCKED", ttl=config.AuthLimit)
             else:
                 error = {
                     'error' : "ForbiddenOperationException",
@@ -353,10 +288,10 @@ def signout():
                 }
                 return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
-                result = model.getalltoken(result)
+                result = Token.getalltoken(result)
                 if result:
                     for i in result:
-                        i.delete_instance()
+                        cache.delete(i)
                 return Response(status=204)
             else:
                 error = {
@@ -376,15 +311,20 @@ def joinserver():
     if request.is_json:
         data = request.json
         AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if "clientToken" in data else None
-        TokenValidate = model.is_validate(AccessToken, ClientToken)
+        ClientToken = data.get("clientToken")
+        TokenValidate = Token.is_validate_strict(AccessToken, ClientToken)
         
-        if TokenValidate:
+        if not TokenValidate:
             # Token有效
             # uuid = token.bind
-            token = model.gettoken(AccessToken, ClientToken)
-            if token.bind:
-                result = model.getprofile_uuid(token.bind)
+            token = Token.gettoken_strict(AccessToken, ClientToken)
+            if not token:
+                return Response(json.dumps({
+                    'error' : "ForbiddenOperationException",
+                    "errorMessage" : "Invalid token."
+                }), status=403, mimetype="application/json; charset=utf-8")
+            if token.get('bind'):
+                result = model.getprofile_uuid(token.get('bind'))
                 if not result:
                     return Response(status=404)
             else:
@@ -392,15 +332,14 @@ def joinserver():
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
-            result = result.get()
-            playeruuid = model.profile.get(name=result.name).profile_id.replace("-", "")
+            player = model.getprofile(result.get().name).get()
+            playeruuid = player.profile_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
-                cache_redis.hmset(data['serverId'], {
+                cache.set(data['serverId'], {
                     "accessToken": AccessToken,
                     "selectedProfile": data['selectedProfile'],
                     "remoteIP": request.remote_addr
-                })
-                cache_redis.expire(data['serverId'], config.ServerIDOutTime)
+                }, ttl=config.ServerIDOutTime)
                 return Response(status=204)
             else:
                 return Response(json.dumps({
@@ -420,16 +359,14 @@ def PlayerHasJoined():
     PlayerName = args['username']
     RemoteIP = args['ip'] if 'ip' in args else None
     Successful = False
-    Data = cache_redis.hgetall(ServerID)
-    Data = {i.decode(): Data[i].decode() for i in Data.keys()}
+    Data = cache.get(ServerID)
     if not Data:
         return Response(status=204)
-    TokenInfo = model.gettoken(Data['accessToken'])
-    ProfileInfo = model.getprofile_uuid_name(TokenInfo.bind, name=PlayerName)
+    TokenInfo = Token.gettoken(Data['accessToken'])
+    ProfileInfo = model.getprofile_uuid_name(TokenInfo.get("bind"), name=PlayerName)
     if not TokenInfo or not ProfileInfo:
         return Response(status=204)
 
-    TokenInfo = TokenInfo.get()
     ProfileInfo = ProfileInfo.get()
 
     Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == Data['remoteIP']][bool(RemoteIP)]

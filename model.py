@@ -6,35 +6,20 @@ import os
 import time
 import uuid
 from datetime import datetime
-from time import strftime
 
 import peewee
 import rsa
-from OpenSSL.crypto import FILETYPE_PEM, load_privatekey, sign
 
 import base
 import password
+from database import db, config
+import cacheout
 
-config = base.Dict2Object(json.loads(open("./data/config.json").read()))
-
-db = {}
-db['global'] = peewee.__dict__[config.database.type](config.database.connect_info.global_db, **config.database.globalinfo)
 class user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
     email = peewee.CharField()
     password = peewee.CharField()
     passwordsalt = peewee.CharField()
-
-    class Meta:
-        database = db['global']
-
-class token(peewee.Model):
-    accessToken = peewee.CharField()
-    clientToken = peewee.CharField()
-    status = peewee.CharField(default=0)
-    bind = peewee.CharField(null=True)
-    user = peewee.CharField()
-    setuptime = peewee.TimestampField(default=time.time())
 
     class Meta:
         database = db['global']
@@ -63,16 +48,15 @@ class textures(peewee.Model):
     class Meta:
         database = db['global']
 
-'''
 class banner(peewee.Model):
     email = peewee.CharField()
     accessToken = peewee.CharField(max_length=32, null=True)
-    profileuuid = peewee.CharField()
-    inittime = peewee.TimestampField(default=int(time.time())) # time.mktime(datetime.now().timetuple())
-    timeout = peewee.TimestampField()
+    profileuuid = peewee.CharField(max_length=32)
+    create_ = peewee.TimestampField(utc=True, column_name="create")
+    timeout = peewee.TimestampField(default=None, utc=True) # 传入一个utc整数
     class Meta:
         database = db['global']
-'''
+
 
 def format_texture(profile, unMetaData=False, BetterData=False):
     try:
@@ -187,109 +171,8 @@ def getprofile_id_name(profileid, name):
     else:
         return result
 
-def getalltoken(User):
-    token.user == User.uuid
-    try:
-        result = token.select().where(token.user == User.uuid)
-    except Exception as e:
-        if "tokenDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
-    else:
-        return result
-
-def NewToken(user, ClientToken=str(uuid.uuid4()).replace("-", "")):
-    Token = token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=ClientToken, bind=user.selected, email=user.email)
-    Token.save()
-    return Token
-
 def nosignuuid():
     return str(uuid.uuid4()).replace("-", "")
-
-def AutoRefrush(Token):
-    # 如果炸了,自动刷新(but status != 2),没有则返回原值
-    ClientToken = Token.clientToken
-    AccessToken = nosignuuid()
-    if Token.status in ["2", "1"]:
-        ReturnToken = token(accessToken=AccessToken, clientToken=ClientToken, bind=Token.bind, email=Token.email)
-        ReturnToken.save()
-        return ReturnToken
-    if Token.status == "0":
-        return Token
-    
-    return Token
-
-def is_validate(AccessToken, ClientToken=None):
-    try:
-        if not ClientToken:
-            try:
-                result = token.get(token.accessToken == AccessToken)
-            except Exception as e:
-                if "tokenDoesNotExist" == e.__class__.__name__:
-                    return False
-        else:
-            try:
-                result = token.get(token.accessToken == AccessToken & token.clientToken == ClientToken)
-            except Exception as e:
-                if "tokenDoesNotExist" == e.__class__.__name__:
-                    result = token.get(token.accessToken == AccessToken)
-    except Exception as e:
-        if "tokenDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
-    else:
-        if result.status in [2,1]:
-            return False
-        else:
-            return True
-
-def gettoken(AccessToken, ClientToken=None):
-    try:
-        if not ClientToken:
-            try:
-                result = token.get(token.accessToken == AccessToken)
-            except Exception as e:
-                if "tokenDoesNotExist" == e.__class__.__name__:
-                    return False
-        else:
-            try:
-                result = token.get(token.accessToken == AccessToken & token.clientToken == ClientToken)
-            except Exception as e:
-                if "tokenDoesNotExist" == e.__class__.__name__:
-                    result = token.get(token.accessToken == AccessToken)
-    except Exception as e:
-        if "tokenDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
-    else:
-        if result.status in [2,1]:
-            return False
-        else:
-            return result
-
-def gettoken_strict(AccessToken, ClientToken=None):
-    try:
-        if ClientToken == None:
-            try:
-                result = token.get(token.accessToken == AccessToken)
-            except Exception as e:
-                if "tokenDoesNotExist" == e.__class__.__name__:
-                    return False
-        else:
-            try:
-                result = token.get((token.accessToken == AccessToken) & (token.clientToken == ClientToken))
-            except Exception as e:
-                if "tokenDoesNotExist" == e.__class__.__name__:
-                    return False
-    except Exception as e:
-        if "tokenDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
-    else:
-        if result.status in [2,1]:
-            return False
-        else:
-            return result
 
 def getuser_uuid(uuid):
     try:
