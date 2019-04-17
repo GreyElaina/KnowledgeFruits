@@ -36,13 +36,13 @@ class TokenCache():
                 return False
         if not result:
             return False
-        return int(time.time()) >= result.get("createTime") + config.TokenTime.EnableTime
+        return int(time.time()) >= result.get("createTime") + (config.TokenTime.EnableTime * config.TokenTime.TimeRange)
 
     def is_validate(self, AccessToken, ClientToken=None):
         result = self.CacheObject.get(self._format(AccessToken))
         if not result:
             return False
-        return int(time.time()) >= result.get("createTime") + config.TokenTime.EnableTime
+        return int(time.time()) >= result.get("createTime") + (config.TokenTime.EnableTime * config.TokenTime.TimeRange)
  
     def gettoken(self, AccessToken, ClientToken=None):
         result = self.CacheObject.get(self._format(AccessToken))

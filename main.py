@@ -109,7 +109,7 @@ def authenticate():
                 "bind": Profileresult.get().uuid if notDoubleProfile else None,
                 "user": user.uuid,
                 "createTime": int(time.time())
-            }, ttl=config.TokenTime.RefrushTime)
+            }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
 
             IReturn = {
                 "accessToken" : AccessToken,
@@ -197,7 +197,7 @@ def refresh():
             "bind": TokenSelected,
             "user": OldToken.get("user"),
             "createTime": int(time.time())
-        }, ttl=config.TokenTime.RefrushTime)
+        }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
 
         cache.delete(".".join(["token", AccessToken]))
         IReturn['accessToken'] = NewAccessToken
@@ -802,7 +802,7 @@ def imageview_head(image):
 
 if __name__ == '__main__':
     if FileExists('./data/global.db'):
-        model.db['global'].create_tables([model.profile, model.token, model.user, model.textures])
+        model.db['global'].create_tables([model.profile, model.user, model.textures])
     if False in [FileExists(config.KeyPath.Private), FileExists(config.KeyPath.Public)]:
         import rsa
         (public, private) = rsa.newkeys(2048)
