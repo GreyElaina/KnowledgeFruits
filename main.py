@@ -18,7 +18,7 @@ from werkzeug.contrib.fixers import LighttpdCGIRootFix
 from werkzeug.exceptions import HTTPException
 import cacheout
 
-import base
+import utils as base
 import model
 import password
 import searchcache

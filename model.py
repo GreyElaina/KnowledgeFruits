@@ -10,7 +10,7 @@ from datetime import datetime
 import peewee
 import rsa
 
-import base
+import utils as base
 import password
 from database import db, config
 import cacheout
@@ -377,10 +377,10 @@ def NewTexture(name, user, photoname, Type="SKIN", model="STEVE"):
 
 if __name__ == '__main__':
     #db['global'].create_tables([profile, token, user, textures])
-    #NewUser("test@gmail.com", "asd123456")
-    #NewUser("1846913566@qq.com", "asd123456")
-    #NewUser("test3@to2mbn.org", "asd123456")
-    #Chenwe_i_lin_skin = NewTexture("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-skin")
+    NewUser("test1@to2mbn.org", "111111")
+    #NewUser("test2@to2mbn.org", "222222")
+    #NewUser("test3@to2mbn.org", "333333")
+    char1skin = NewTexture("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-skin")
     #Chenwe_i_lin_cape = NewTexture("./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-cape",Type="CAPE")
     #testplayer_skin = NewTexture("./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer-skin",model="ALEX")
     #testplayer3_cape = NewTexture("./data/texture/ddcf7d09723e799e59d7f19807d0bf5e3a2c044ce17e76a48b8ac4d27c0b16e0.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer3-cape",Type="CAPE")

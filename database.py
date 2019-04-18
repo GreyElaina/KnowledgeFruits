@@ -1,6 +1,6 @@
 import peewee
 import json
-import base
+import utils as base
 
 config = base.Dict2Object(json.loads(open("./data/config.json").read()))
 
