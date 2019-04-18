@@ -22,17 +22,12 @@ import utils as base
 import model
 import password
 import searchcache
+from base import app, config, raw_config, cache, Token
 
-config = base.Dict2Object(json.loads(open("./data/config.json").read()))
-raw_config = json.loads(open("./data/config.json").read())
-
-app = Flask(__name__)
 app.config['SECRET_KEY'] = config.salt
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
 #app.config['UPLOAD_FOLDER'] = os.getcwd() + "/data/texture/"
 
-cache = cacheout.Cache(ttl=0)
-Token = searchcache.TokenCache(cache)
 class FlaskConfig(object):
     SCHEDULER_API_ENABLED = True
 
