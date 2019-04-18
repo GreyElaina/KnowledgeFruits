@@ -12,8 +12,8 @@ import rsa
 
 import utils as base
 import password
-from database import db, config
-import cacheout
+from database import db
+from base import config
 
 class user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
