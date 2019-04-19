@@ -21,8 +21,11 @@ import cacheout
 import utils as base
 import model
 import password
-import searchcache
 from base import app, config, raw_config, cache, Token
+
+import fairy
+import customskinapi
+import knowledgeapi
 
 app.config['SECRET_KEY'] = config.salt
 app.config['PERMANENT_SESSION_LIFETIME'] = timedelta(seconds=1)
@@ -82,7 +85,7 @@ def authenticate():
         AvailableProfiles = []
         if password.crypt(data['password'], user.passwordsalt) == user.password:
             # 登录成功.
-            ClientToken = data['clientToken'] if "clientToken" in data else str(uuid.uuid4()).replace("-","")
+            ClientToken = data.get("clientToken", str(uuid.uuid4()).replace("-",""))
             AccessToken = str(uuid.uuid4()).replace("-","")
             notDoubleProfile = False
 
@@ -145,7 +148,7 @@ def refresh():
             }
             return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         
-        if int(time.time()) >= OldToken.get("createTime") + config.TokenTime.RefrushTime:
+        if int(time.time()) >= OldToken.get("createTime") + (config.TokenTime.RefrushTime * config.TokenTime.TimeRange):
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid token."
@@ -412,359 +415,6 @@ def searchmanyprofile():
 # /sessionserver
 
 #####################
-
-# /api/knowledgefruits/
-@app.route("/api/knowledgefruits/serverinfo/knowledgefruits")
-@app.route("/api/knowledgefruits/serverinfo")
-@app.route("/api/knowledgefruits/")
-def serverinfo():
-    return Response(json.dumps({
-        "Yggdrasil" : {
-            "BaseUrl" : config.const.base
-        },
-        "OAuth": {
-            "github": {
-                "authorize_url": config.OAuth.github.authorize_url,
-                "icon": config.OAuth.github.icon,
-                "register": "".join([config.OAuth.github.authorize_url, "?", urlencode({
-                    "client_id": config.OAuth.github.client_id,
-                    "scope": config.OAuth.github.scope
-                })])
-            }
-        },
-        "TokenTime": raw_config['TokenTime']
-    }), mimetype='application/json; charset=utf-8')
-
-@app.route("/api/knowledgefruits/authenticate/security", methods=['POST'])
-def kf_randomkey():
-    if request.is_json:
-        data = request.json
-        Randomkey = password.CreateSalt(length=8)
-        authid = data['authid'] if 'authid' in data else str(uuid.uuid4()).replace('-', '')
-        try:
-            user_result = model.getuser(data['username'])
-        except Exception as e:
-            if "userDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
-        if not user_result:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        salt = user_result.passwordsalt
-        if user_result:
-            IReturn = {
-                "authId" : authid,
-                "HashKey" : Randomkey,
-                "username" : user_result.email,
-                "salt" : salt
-            }
-            cache_redis.hmset(authid, {
-                "HashKey" : Randomkey,
-                "username" : user_result.email,
-                "salt" : salt,
-                "VerifyValue" : user_result.password,
-                "authId" : authid
-            })
-            cache_redis.expire(authid, 30)
-            return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
-        else:
-            return Response(status=403)
-
-@app.route("/api/knowledgefruits/authenticate/security/verify", methods=['POST'])
-def kf_login_verify():
-    if request.is_json:
-        data = request.json
-        Data = cache_redis.hgetall(data['authId'])
-        Data = {i.decode(): Data[i].decode() for i in Data.keys()}
-        if not Data:
-            return Response(status=403)
-        else:
-            user_result = model.getuser(Data['username'])
-            if user_result:
-                AuthRequest = password.crypt(user_result.password, Data['HashKey'])
-                if AuthRequest == data['Password']:
-                    Token = model.token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user_result.email)
-                    Token.save() # 颁发Token
-                    IReturn = {
-                        "accessToken" : Token.accessToken,
-                        "clientToken" : Token.clientToken
-                    }
-                    cache_redis.delete(data['authId'])
-                    return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
-                else:
-                    cache_redis.delete(data['authId'])
-                    error = {
-                        'error' : "ForbiddenOperationException",
-                        'errorMessage' : "Invalid credentials. Invalid username or password."
-                    }
-                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            else:
-                cache_redis.delete(data['authId'])
-                return Response(status=403)
-
-@app.route("/api/knowledgefruits/authenticate/password/test", methods=['POST'])
-def kf_passwd_test():
-    if not re.match(base.StitchExpression(config.reMatch.UserPassword), request.data.decode()):
-        return Response(status=400)
-    else:
-        return Response(status=204)
-
-@app.route("/api/knowledgefruits/authenticate/email/test", methods=['POST'])
-def kf_email_test():
-    if not re.match(base.StitchExpression(config.reMatch.UserEmail), request.data.decode()):
-        return Response(status=400)
-    else:
-        return Response(status=204)
-
-@app.route("/api/knowledgefruits/authenticate/password/change/<username>", methods=['POST'])
-def kf_user_changepasswd(username):
-    if request.is_json:
-        data = request.json
-        user_result = model.getuser(username)
-        if user_result:
-            AccessToken = data['accessToken']
-            ClientToken = data['clientToken'] if 'clientToken' in data else None
-            if not ClientToken:
-                token_result_boolean = model.is_validate(AccessToken)
-                token = model.gettoken(AccessToken)
-            else:
-                token_result_boolean = model.is_validate(AccessToken, ClientToken)
-                token = model.gettoken(AccessToken, ClientToken)
-            if token_result_boolean and token:
-                # 如果Token有效
-                # 开始解析由公钥(/api/yggdrasil)加密的东西
-                # 这玩意是个base64
-                encrypt = base64.b64decode(data['Password'])
-                decrypt_errorMessage = password.decrypt(encrypt, config.KeyPath.Private)
-                user = model.getuser(token.email)
-                if password.crypt(decrypt_errorMessage, user.passwordsalt) == user.password:
-                    return Response(status=204)
-                newsalt = base.CreateSalt(length=8)
-                newpassword = password.crypt(decrypt_errorMessage, newsalt)
-                user.password = newpassword
-                user.passwordsalt = newsalt
-                user.save()
-                #开始否决所有的Token
-                model.token.delete().where(model.token.email == user.email).execute()
-                return Response(status=204)
-            else:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    "errorMessage" : "Invalid token."
-                }), status=403, mimetype="application/json; charset=utf-8")
-        else:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                "errorMessage" : "Invalid token."
-            }), status=403, mimetype="application/json; charset=utf-8")
-
-@app.route("/api/knowledgefruits/search/textures/<path:args>")
-def kf_texturesinfo(args):
-    if (len(args.split("/")) % 2) != 0:
-        return Response(json.dumps({
-            "error": "WrongArgs",
-            "errorMessage": "参数格式错误"
-        }), mimetype='application/json; charset=utf-8', status=403)
-    Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
-    content = [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][0]
-    for i in [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
-        content = content & i
-    try:
-        return Response(json.dumps([
-            model.kf_format_textures(i) for i in model.findtextures(content)
-        ]), mimetype='application/json; charset=utf-8')
-    except KeyError as e:
-        return Response(json.dumps({
-            "error": "WrongArgs",
-            "errorMessage": "预料之外的参数传入"
-        }), mimetype='application/json; charset=utf-8', status=403)
-
-@app.route("/api/knowledgefruits/search/profiles/<path:args>")
-def kf_profileinfo(args):
-    if (len(args.split("/")) % 2) != 0:
-        return Response(json.dumps({
-            "error": "WrongArgs",
-            "errorMessage": "参数格式错误"
-        }), mimetype='application/json; charset=utf-8', status=403)
-    Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
-    content = [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][0]
-    for i in [model.profile.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
-        content = content & i
-    try:
-        return Response(json.dumps([
-            model.kf_format_profile(i) for i in model.findprofile(content)
-        ]), mimetype='application/json; charset=utf-8')
-    except KeyError as e:
-        return Response(json.dumps({
-            "error": "WrongArgs",
-            "errorMessage": "预料之外的参数传入"
-        }), mimetype='application/json; charset=utf-8', status=403)
-
-@app.route("/api/knowledgefruits/search/id/user/<email>")
-def kf_search_user_email(email):
-    result = model.getuser(email)
-    if not result:
-        return Response(json.dumps({
-            "error": "WrongArgs",
-            "errorMessage": "错误的参数"
-        }), mimetype='application/json; charset=utf-8', status=403)
-    return Response(json.dumps({"uuid": result.uuid}), mimetype='application/json; charset=utf-8')
-
-@app.route("/api/knowledgefruits/authenticate/simple/refrush", methods=['GET', "POST"])
-def kf_authenticate_simple_refrush():
-    if request.is_json:
-        data = request.json
-        AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if 'clientToken' in data else str(uuid.uuid4()).replace("-", "")
-        try:
-            if 'clientToken' in data:
-                OldToken = model.token.get(accessToken=AccessToken, clientToken=ClientToken)
-            else:
-                OldToken = model.token.get(accessToken=AccessToken)
-        except Exception as e:
-            if "tokenDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
-
-        if OldToken.status not in ["0", "1"]:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-        User = model.user.get(uuid=OldToken.user)
-
-        NewToken = model.token(accessToken=str(uuid.uuid4()).replace('-', ''), clientToken=OldToken.clientToken, user=OldToken.user, bind=TokenSelected)
-        NewToken.save()
-        OldToken.delete_instance()
-        IReturn = {
-            "accessToken" : NewToken.accessToken,
-            'clientToken' : OldToken.clientToken,
-            #'selectedProfile' : {}
-        }
-        return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
-
-@app.route("/api/knowledgefruits/simple/authserver/validate", methods=['POST'])
-def kf_validate():
-    if request.is_json:
-        data = request.json
-        AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if "clientToken" in data else None
-        try:
-            if not ClientToken:
-                result = model.token.get(model.token.accessToken == AccessToken)
-            else:
-                result = model.token.get(model.token.accessToken == AccessToken, model.token.clientToken == ClientToken)
-        except Exception as e:
-            if "tokenDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
-        else:
-            #User = model.user.get(email=result.email)
-            '''if User.permission == 0:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
-                }), status=403, mimetype='application/json; charset=utf-8')'''
-
-            if result.status in ["2", "1"]:
-                if result.status == "2":
-                    result.delete_instance()
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            else:
-                return Response(status=204)
-
-@app.route("/api/knowledgefruits/simple/authserver/invalidate", methods=['POST'])
-def kf_invalidate():
-    if request.is_json:
-        data = request.json
-        AccessToken = data['accessToken']
-        ClientToken = data['clientToken'] if "clientToken" in data else None
-        try:
-            if ClientToken == None:
-                try:
-                    result = model.token.get(model.token.accessToken == AccessToken)
-                except Exception as e:
-                    if "tokenDoesNotExist" == e.__class__.__name__:
-                        return Response(status=204)
-            else:
-                try:
-                    result = model.token.get(model.token.accessToken == AccessToken & model.token.clientToken == ClientToken)
-                except Exception as e:
-                    if "tokenDoesNotExist" == e.__class__.__name__:
-                        result = model.token.get(model.token.accessToken == AccessToken)
-        except Exception as e:
-            if "tokenDoesNotExist" == e.__class__.__name__:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            raise e
-        else:
-            result.delete_instance()
-            return Response(status=204)
-
-#@limit
-@app.route('/api/knowledgefruits/authenticate/security/signout/verify', methods=['POST'])
-def kf_signout():
-    if request.is_json:
-        data = request.json
-        Data = cache_redis.hgetall(data['authId'])
-        Data = {i.decode(): Data[i].decode() for i in Data.keys()}
-        if cache_redis.get(".".join(['lock', user_result.email])):
-            return Response(status=403)
-        if not Data:
-            return Response(status=403)
-        else:
-            user_result = model.getuser(Data['username'])
-            if user_result:
-                if not cache_redis.get(".".join(['lock', user_result.email])):
-                    cache_redis.setnx(".".join(['lock', user_result.email]), "locked")
-                    cache_redis.expire(".".join(['lock', user_result.email]), config.AuthLimit)
-                else:
-                    error = {
-                        'error' : "ForbiddenOperationException",
-                        'errorMessage' : "Invalid credentials. Invalid username or password."
-                    }
-                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-                AuthRequest = password.crypt(user_result.password, Data['HashKey'])
-                if AuthRequest == data['Password']:
-                    model.token.delete().where(model.token.user == user_result.uuid).execute()
-                else:
-                    cache_redis.delete(data['authId'])
-                    error = {
-                        'error' : "ForbiddenOperationException",
-                        'errorMessage' : "Invalid credentials. Invalid username or password."
-                    }
-                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
-            else:
-                cache_redis.delete(data['authId'])
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }), status=403)
-
-#####################
 @app.route("/texture/<image>", methods=['GET'])
 def imageview(image):
     try:
@@ -806,7 +456,7 @@ if __name__ == '__main__':
         with open(config.KeyPath.Public, 'wb') as f:
             f.write(public.save_pkcs1())
     app.wsgi_app = LighttpdCGIRootFix(app.wsgi_app)
-    from paste.translogger import TransLogger
-    import waitress
-    import paste
-    waitress.serve(TransLogger(app, setup_console_handler=False), host='0.0.0.0', port=5001)
+    #from paste.translogger import TransLogger
+    #import waitress
+    #waitress.serve(TransLogger(app, setup_console_handler=False), host='0.0.0.0', port=5001)
+    app.run(port=5001, debug=True)

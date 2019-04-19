@@ -7,6 +7,9 @@ from PIL import Image
 import datetime
 import time
 
+def chunk(l, n):
+    return [l[i:i + n] for i in range(0, len(l), n)]
+
 def gettimestamp(date):
     #return int(time.mktime(date.timetuple()))
     return int(date)

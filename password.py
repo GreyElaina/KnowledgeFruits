@@ -1,5 +1,5 @@
 import hashlib
-from base import CreateSalt
+from utils import CreateSalt
 import rsa
 
 def crypt(password, salt=CreateSalt(length=8)):

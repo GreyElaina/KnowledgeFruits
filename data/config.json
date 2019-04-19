@@ -68,6 +68,14 @@
             "isSigner": true
         } 
     },
+    "UploadSkin": {
+        "security": {
+            "size": {
+                "width": [0, 128],
+                "height": [0, 128]
+            }
+        }
+    },
     "OAuth": {
         "github": {
             "access_token_url": "https://github.com/login/oauth/access_token",

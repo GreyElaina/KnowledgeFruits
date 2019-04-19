@@ -13,7 +13,7 @@ import rsa
 import utils as base
 import password
 from database import db
-from base import config
+from base import config, Token
 
 class user(peewee.Model):
     uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
@@ -103,7 +103,7 @@ def format_texture(profile, unMetaData=False, BetterData=False):
     return IReturn
 
 def getuser_byaccesstoken(accessToken):
-    nowtoken = gettoken(accessToken)
+    nowtoken = Token.gettoken(accessToken)
     if not nowtoken:
         return False
     return user.get(user.email == nowtoken.email)
@@ -111,6 +111,16 @@ def getuser_byaccesstoken(accessToken):
 def gettexture(textureid):
     try:
         result = textures.select().where(textures.textureid == textureid).get()
+    except Exception as e:
+        if "texturesDoesNotExist" == e.__class__.__name__:
+            return False
+        raise e
+    else:
+        return result
+
+def gettexture_photoname(name):
+    try:
+        result = textures.select().where(textures.photoname == name).get()
     except Exception as e:
         if "texturesDoesNotExist" == e.__class__.__name__:
             return False
@@ -133,7 +143,10 @@ def getskinmodel_profile(iprofile):
 def gettexture_hash(Hash):
     if not Hash:
         return False
-    texture = textures.get(textures.hash == Hash)
+    try:
+        texture = textures.get(textures.hash == Hash)
+    except textures.DoesNotExist:
+        return False
     return texture
 
 def format_profile(profile, unsigned=False, Properties=False, unMetaData=False, BetterData=False):
