@@ -7,7 +7,6 @@ from PIL import Image
 import datetime
 import time
 import os
-from paramiko.rsakey import RSAKey, SSHException
 
 def chunk(l, n):
     return [l[i:i + n] for i in range(0, len(l), n)]
@@ -112,6 +111,9 @@ def getblock(skin, block=(1, 1)):
     #photo.save(imgByteArr, format='PNG')
     return photo
 
+def getblock_PIL(skin, block=(1, 1)):
+    return skin.crop((block[0]*8, block[1]*8, (block[0]+1)*8, (block[1]+1)*8))
+
 def gethead_skin(skin):
     rawhead = getblock(skin)
     rawheat = getblock(skin, block=(5, 1))
@@ -135,20 +137,11 @@ def Dict2Object(Object):
 def StitchExpression(Object):
     return "".join([Object.content, "{%s,%s}" % (Object.length.min, Object.length.max), "$" if Object.isSigner else ""])
 
-def genkeys():
-    output = StringIO()
-    sbuffer = StringIO()
-    key_content = {}
-    key = RSAKey.generate(2048)
-    key.write_private_key(output)
-    print(key.get_base64())
-    key.write_public_key(sbuffer)
+def ifnone(i):
+    return True if i else False
 
-    private_key = output.getvalue()
-    public_key = sbuffer.getvalue()
-    key_content['public_key'] = public_key
-    key_content['private_key'] = private_key
-    return key_content
+def isallnone(i):
+    return True not in [ifnone(ii) for ii in i]
 
 if __name__ == "__main__":
     #print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
