@@ -61,14 +61,12 @@ class banner(peewee.Model):
 def format_texture(profile, unMetaData=False, BetterData=False):
     try:
         data_skin = textures.select().where(textures.textureid==profile.skin)
-    except Exception as e:
-        if "texturesDoesNotExist" == e.__class__.__name__:
-            data_skin = {}
+    except textures.DoesNotExist:
+        data_skin = {}
     try:
         data_cape = textures.select().where(textures.textureid==profile.cape)
-    except Exception as e:
-        if "texturesDoesNotExist" == e.__class__.__name__:
-            data_cape = {}
+    except textures.DoesNotExist:
+        data_cape = {}
     #print(type(data.time))
     if BetterData:
         if not [True, False][getskintype_profile(profile) == "SKIN" and getskinmodel_profile(profile) == "ALEX"]:
@@ -111,20 +109,16 @@ def getuser_byaccesstoken(accessToken):
 def gettexture(textureid):
     try:
         result = textures.select().where(textures.textureid == textureid).get()
-    except Exception as e:
-        if "texturesDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except textures.DoesNotExist:
+        return False
     else:
         return result
 
 def gettexture_photoname(name):
     try:
         result = textures.select().where(textures.photoname == name).get()
-    except Exception as e:
-        if "texturesDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except textures.DoesNotExist:
+        return False
     else:
         return result
 
@@ -190,119 +184,96 @@ def nosignuuid():
 def getuser_uuid(uuid):
     try:
         result = user.get(user.uuid == uuid)
-    except Exception as e:
-        if "userDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except user.DoesNotExist:
+        return False
     else:
         return result
 
 def getprofile(name):
     try:
         result = profile.select().where(profile.name == name)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def getprofile_uuid(uuid):
     try:
         result = profile.select().where(profile.uuid == uuid)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def getprofile_createby(by):
     try:
         result = profile.select().where(profile.createby == by)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def getprofile_id(pid):
     try:
         result = profile.select().where(profile.profile_id == pid)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def getprofile_uuid(uuid):
     try:
         result = profile.select().where(profile.uuid == uuid)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def getprofile_uuid_name(uuid, name):
     try:
         result = profile.select().where(profile.uuid == uuid, profile.name == name)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def getuser(email):
     try:
         result = user.get(user.email == email)
-    except Exception as e:
-        if "userDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except user.DoesNotExist:
+        return False
     else:
         return result
 
 def gettextures_byuserid(userid):
     try:
         result = textures.select().where(textures.userid == userid)
-    except Exception as e:
-        if "userDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except user.DoesNotExist:
+        return False
     else:
         return result
 
 def findprofilebyid(fid):
     try:
         result = profile.select().where(profile.profile_id == fid)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result.get()
 
 def findprofile(args):
     try:
         result = profile.select().where(args)
-    except Exception as e:
-        if "profileDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except profile.DoesNotExist:
+        return False
     else:
         return result
 
 def findtextures(args):
     try:
         result = textures.select().where(args)
-    except Exception as e:
-        if "texturesDoesNotExist" == e.__class__.__name__:
-            return False
-        raise e
+    except textures.DoesNotExist:
+        return False
     else:
         return result
 
