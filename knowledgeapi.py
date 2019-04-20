@@ -1,9 +1,15 @@
-from base import config, cache, app, Token
+from base import config, cache, app, Token, raw_config
 from flask import request, Response
 import json
 import uuid
 import model
 import hashlib
+import password
+import base64
+import utils
+import re
+import time
+from urllib.parse import urlencode
 
 @app.route("/api/knowledgefruits/serverinfo/knowledgefruits")
 @app.route("/api/knowledgefruits/serverinfo")
@@ -111,7 +117,7 @@ def kf_login_verify():
                             "accessToken" : Token.accessToken,
                             "clientToken" : Token.clientToken
                         }
-                        cache_redis.delete(data['authId'])
+                        cache.delete(data['authId'])
                         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
                     if Data.get("inorderto") == "signout":
                         result = Token.getalltoken(user_result)
@@ -120,26 +126,26 @@ def kf_login_verify():
                                 cache.delete(i)
                         return Response(status=204)
                 else:
-                    cache_redis.delete(data['authId'])
+                    cache.delete(data['authId'])
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Invalid credentials. Invalid username or password."
                     }
                     return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
-                cache_redis.delete(data['authId'])
+                cache.delete(data['authId'])
                 return Response(status=403)
 
 @app.route("/api/knowledgefruits/authenticate/password/test", methods=['POST'])
 def kf_passwd_test():
-    if not re.match(base.StitchExpression(config.reMatch.UserPassword), request.data.decode()):
+    if not re.match(utils.StitchExpression(config.reMatch.UserPassword), request.data.decode()):
         return Response(status=400)
     else:
         return Response(status=204)
 
 @app.route("/api/knowledgefruits/authenticate/email/test", methods=['POST'])
 def kf_email_test():
-    if not re.match(base.StitchExpression(config.reMatch.UserEmail), request.data.decode()):
+    if not re.match(utils.StitchExpression(config.reMatch.UserEmail), request.data.decode()):
         return Response(status=400)
     else:
         return Response(status=204)
@@ -167,7 +173,7 @@ def kf_user_changepasswd(username):
                 user = model.getuser(token.email)
                 if password.crypt(decrypt_errorMessage, user.passwordsalt) == user.password:
                     return Response(status=204)
-                newsalt = base.CreateSalt(length=8)
+                newsalt = utils.CreateSalt(length=8)
                 newpassword = password.crypt(decrypt_errorMessage, newsalt)
                 user.password = newpassword
                 user.passwordsalt = newsalt

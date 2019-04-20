@@ -1,11 +1,13 @@
 import hashlib
 import binascii
 import random
-from io import BytesIO
+from io import BytesIO, StringIO
 #from skimage import io
 from PIL import Image
 import datetime
 import time
+import os
+from paramiko.rsakey import RSAKey, SSHException
 
 def chunk(l, n):
     return [l[i:i + n] for i in range(0, len(l), n)]
@@ -133,6 +135,21 @@ def Dict2Object(Object):
 def StitchExpression(Object):
     return "".join([Object.content, "{%s,%s}" % (Object.length.min, Object.length.max), "$" if Object.isSigner else ""])
 
+def genkeys():
+    output = StringIO()
+    sbuffer = StringIO()
+    key_content = {}
+    key = RSAKey.generate(2048)
+    key.write_private_key(output)
+    print(key.get_base64())
+    key.write_public_key(sbuffer)
+
+    private_key = output.getvalue()
+    public_key = sbuffer.getvalue()
+    key_content['public_key'] = public_key
+    key_content['private_key'] = private_key
+    return key_content
+
 if __name__ == "__main__":
     #print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
     #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
@@ -144,4 +161,4 @@ if __name__ == "__main__":
     #time_end = time.time()
     #print('totally cost',time_end-time_start)
     #print(PngBinHash("./data/texture/74349566b05e0d4db0705fe511851e119341538575648c369d9dd6fcf8c8623e.png"))
-    pass
+    print(genkeys())

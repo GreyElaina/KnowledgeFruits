@@ -67,7 +67,7 @@ class TokenCache():
 config = utils.Dict2Object(json.loads(open("./data/config.json").read()))
 raw_config = json.loads(open("./data/config.json").read())
 app = Flask("main")
-cache = cacheout.Cache(ttl=0)
+cache = cacheout.Cache(ttl=0, maxsize=32768)
 Token = TokenCache(cache)
 
 # For someone

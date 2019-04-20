@@ -1,4 +1,4 @@
-# Knowledge Fruits(智慧果)
+# KnowledgeFruits
 使用Python驱动的Mojang Yggdrasil服务端, 旨在开箱即用而不失功能.
 
 # Running
@@ -6,10 +6,6 @@
 
 ```
 python3 -m pip install -r requirements.txt
-```
-或:
-```
-python3 -m pip install rsa flask peewee flask_limiter simplejson flask_apscheduler pyopenssl scikit-image scipy numpy
 ```
 
 运行main.py即启动:
@@ -20,7 +16,7 @@ python3 main.py
 确保运行目录下有 `data`, `data/texture` 目录.
 
 # 配置
-本程序所有配置都在 `config.py` 文件内.  
+本程序所有配置都在 `data/config.json` 文件内.  
 本说明只包含你可以更改的配置项, 其他最好别改.  
 配置项说明:
 
@@ -40,9 +36,4 @@ python3 main.py
 |`limiter_filter.default_limits`|默认赋值给各路由的速率限制||使用`flask_limiter`的语法|
 |`NeedF5`|使登录令牌状态为`需要刷新`可持续的时间, 单位天|5|实际上,登录令牌状态为`需要刷新`可持续的时间默认是`CanUse - NeedF5`天, 当`NeedF5`为5, `CanUse`为3时, 用户只有第4,5天,共计`2`天可以执行刷新操作|
 |`CanUse`|登录令牌状态为`正常`持续的时间, 单位天|3||
-|`runattr`|app.run函数启动时传入的参数|||
-|`runattr.host`|服务监听的地址|`0.0.0.0`||
-|`runattr.port`|服务监听的端口|`5001`||
-|`runattr.debug`|调试模式, 在生产环境中用时请设为`False`|`True`||
 |**`url`**|服务实际访问地址|`http://192.168.31.189:5001`|实际设置时请**不要**让最后有个`/`, 会死人的.|
-|`SiteDomain`|允许的皮肤文件来源||填入你的域名或者IP,不带端口那种|

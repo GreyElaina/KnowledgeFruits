@@ -5,6 +5,7 @@ import uuid
 import model
 import hashlib
 import utils
+import os
 
 def format_profile_csl(profile):
     IReturn = {
@@ -33,7 +34,7 @@ def customskin(profile):
     return Response(json.dumps(format_profile_csl(profile)), mimetype='application/json; charset=utf-8')
 
 @app.route("/api/customskin/textures/<image>", methods=['GET'])
-def imageview(image):
+def csl_imageview(image):
     try:
         with open(os.getcwd() + "/data/texture/" + image + '.png', "rb") as f:
             image = f.read()
