@@ -106,7 +106,7 @@ def fairy_upload():
     if not (width % 22 != 0):
         width = int(width / 22) * 32
 
-    image = Image.new('RGBA', (width, height), (255, 255, 255))
+    image = Image.new('RGBA', (width, height), (255, 255, 255, 255))
     draw = ImageDraw.Draw(image)
     dots = utils.chunk(list(data[(32 + 64):]), 4)[2:]
     chunks = utils.chunk(dots, height)
@@ -123,7 +123,7 @@ def fairy_upload():
     
     if skintype == "SKIN":
         if height % 64 == 0:
-            if len(list(set(list(image.crop((width - 2, height - 12, width, height)).getdata())))) == 1:
+            if len(list(set(list(image.crop((width - 2, height - 12, width, height)).getdata())))) == 1 and list(set(list(image.crop((width - 2, height - 12, width, height)).getdata()))) == (255, 255, 255 ,255):
                 skinmodel = "ALEX"
             else:
                 skinmodel = "STEVE"
