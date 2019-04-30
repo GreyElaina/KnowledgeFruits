@@ -83,7 +83,7 @@ def fairy_upload():
     size = Cached.get("size")
     height = size.get("height")
     width = size.get("width")
-    if len(data) - (32 + 64) < ((height * width) * 4):
+    if len(data) - (32 + 64 + 8) != ((height * width) * 4):
         return Response(json.dumps({
             "error": "ForbiddenOperationException",
             "errorMessage": "Parsing does not provide sufficient amount of bytes"
@@ -99,7 +99,7 @@ def fairy_upload():
             "error": "ForbiddenOperationException",
             "errorMessage": "No correct encoded image."
         }), status=403, mimetype='application/json; charset=utf-8')
-    
+        
     if not (height % 17 != 0):
         height = int(width / 17) * 32
     
