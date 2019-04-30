@@ -16,10 +16,16 @@ from database import db
 from base import config, Token
 
 class user(peewee.Model):
-    uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""))
+    uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""), index=True)
+    username = peewee.CharField(null=True)
+    head = peewee.CharField(null=True)
     email = peewee.CharField()
     password = peewee.CharField()
     passwordsalt = peewee.CharField()
+    permission = peewee.CharField(default="common_user")
+    last_login = peewee.TimestampField(default=None, utc=True)
+    last_joinserver = peewee.TimestampField(default=None, utc=True)
+    register_time = peewee.TimestampField(default=None, utc=True)
 
     class Meta:
         database = db['global']
@@ -30,8 +36,9 @@ class profile(peewee.Model):
     name = peewee.CharField()
     skin = peewee.CharField(null=True)
     cape = peewee.CharField(null=True)
-    time = peewee.CharField(default=str(int(time.time())))
-    createby = peewee.CharField() # 谁创建的角色?  邮箱
+    create_time = peewee.TimestampField(utc=True)
+    change_time = peewee.TimestampField(utc=True)
+    createby = peewee.CharField() # 谁创建的角色?  uuid
     class Meta:
         database = db['global']
 
@@ -44,29 +51,100 @@ class textures(peewee.Model):
     type = peewee.CharField(default='SKIN')
     model = peewee.CharField(default='STEVE')
     hash = peewee.CharField()
+    isPrivate = peewee.BooleanField(default=False)
 
     class Meta:
         database = db['global']
 
 class banner(peewee.Model):
-    email = peewee.CharField()
-    accessToken = peewee.CharField(max_length=32, null=True)
-    profileuuid = peewee.CharField(max_length=32)
-    create_ = peewee.TimestampField(utc=True, column_name="create")
-    timeout = peewee.TimestampField(default=None, utc=True) # 传入一个utc整数
+    user = peewee.CharField()
+    profilename = peewee.CharField(null=True)
+    create_time = peewee.TimestampField(utc=True)
+    group = peewee.CharField(default="global")
+    until = peewee.TimestampField(default=None, utc=True) # 传入一个utc整数
     class Meta:
         database = db['global']
 
+class group(peewee.Model):
+    uuid = peewee.CharField(default=base.shortid())
+    name = peewee.CharField()
+    creater = peewee.CharField()
+    manager = peewee.CharField()
+    date_out = peewee.TimestampField(default=None, utc=True)
+    create_date = peewee.TimestampField(utc=True)
+    joinway = peewee.CharField(default="public_join")
+
+    kicked_number = peewee.IntegerField(default=0)
+    total_number = peewee.IntegerField(default=0) # 我都不知道我之前写的这是啥....先加上先
+    max_number = peewee.IntegerField(default=1)
+    total_signout = peewee.IntegerField(default=0)
+    
+    enable_yggdrasil = peewee.BooleanField(default=True)
+    enable_invite = peewee.BooleanField(default=True)
+    enable_public_joinhistory = peewee.BooleanField(default=True)
+    enable_public_memberlist = peewee.BooleanField(default=False)
+
+    class Meta:
+        database = db['global']
+
+class member(peewee.Model):
+    user = peewee.CharField()
+    group = peewee.CharField()
+    permission = peewee.CharField()
+    last_joinserver = peewee.TimestampField(utc=True)
+
+    kick_others_number = peewee.IntegerField(default=0) # 你难道会记得你踢了几个人吗? KF:you.kick_others_number, 我是统计主义者.
+    managedown_number = peewee.IntegerField(default=0) # ouch! 你怎么回事啊,又被下管理了?
+    manageup_number = peewee.IntegerField(default=0)
+    move_times = peewee.IntegerField(default=0) # 移动次数...? 是被飞机次数哒, 我究竟死了多少次了?你不要过来啊
+    permission_used_times = peewee.IntegerField(default=0) # 权利蒙蔽人的双眼,只有数据才能显出其罪恶本质....
+    join_times = peewee.IntegerField(default=1) # 你进来几次了?
+    be_kicked_times_total = peewee.IntegerField(default=0)
+    be_banned_times_user = peewee.IntegerField(default=0)
+    be_banned_times_profile = peewee.IntegerField(default=0)
+    group_setting_changed_times = peewee.IntegerField(default=0)
+    last_changed_group_setting = peewee.IntegerField(default=0)
+    
+    is_disabled = peewee.BooleanField(default=False) # 我可是...能够记住一切的一切的哦, 不要逃走哦...
+    
+    class Meta:
+        database = db['global']
+
+class setting(peewee.Model):
+    item = peewee.CharField()
+    value = peewee.CharField()
+    last_value = peewee.CharField(null=True)
+    change_date = peewee.TimestampField(utc=True)
+    changer = peewee.CharField(null=True)
+
+    class Meta:
+        database = db['global']
+
+class log_yggdrasil(peewee.Model):
+    operational = peewee.CharField()
+    user = peewee.CharField()
+    profile = peewee.CharField(null=True)
+    otherargs = peewee.CharField(null=True)
+    IP = peewee.CharField()
+    time = peewee.TimestampField(utc=True)
+
+    class Meta:
+        database = db['log']
+
+class log_kf(peewee.Model):
+    operational = peewee.CharField()
+    user = peewee.CharField()
+    profile = peewee.CharField(null=True)
+    otherargs = peewee.CharField(null=True)
+    IP = peewee.CharField()
+    time = peewee.TimestampField(utc=True)
+
+    class Meta:
+        database = db['log']
 
 def format_texture(profile, unMetaData=False, BetterData=False):
-    try:
-        data_skin = textures.select().where(textures.textureid==profile.skin)
-    except textures.DoesNotExist:
-        data_skin = {}
-    try:
-        data_cape = textures.select().where(textures.textureid==profile.cape)
-    except textures.DoesNotExist:
-        data_cape = {}
+    data_skin = textures.select().where(textures.textureid==profile.skin)
+    data_cape = textures.select().where(textures.textureid==profile.cape)
     #print(type(data.time))
     if BetterData:
         if not [True, False][getskintype_profile(profile) == "SKIN" and getskinmodel_profile(profile) == "ALEX"]:
@@ -100,12 +178,6 @@ def format_texture(profile, unMetaData=False, BetterData=False):
             del IReturn['textures'][i]["metadata"]
     return IReturn
 
-def getuser_byaccesstoken(accessToken):
-    nowtoken = Token.gettoken(accessToken)
-    if not nowtoken:
-        return False
-    return user.get(user.email == nowtoken.email)
-
 def gettexture(textureid):
     try:
         result = textures.select().where(textures.textureid == textureid).get()
@@ -133,6 +205,18 @@ def getskinmodel_profile(iprofile):
         return False
     texture = textures.get(textures.textureid == iprofile.skin)
     return texture.model
+
+def isBanned(user, group="global"):
+    ban_info = banner.select().where(banner.user == user.uuid)
+    if ban_info:
+        for i in ban_info:
+            if time.time() < i.until.timestamp():
+                break
+        else:
+            return False
+        return True
+    else:
+        return False
 
 def gettexture_hash(Hash):
     if not Hash:
