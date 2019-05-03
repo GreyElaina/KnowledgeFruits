@@ -60,13 +60,30 @@ def OfflinePlayerUUID(name):
         return "-".join(components)
     return getuuid(bin2hex("".join(data)))
 
+def QuickSort(List, start, end):
+    if start < end:
+        i,j = start,end
+        base = List[i]
+
+        while i < j:
+            while (i < j) and (List[j] >= base):
+                j = j - 1
+            List[i] = List[j]
+            while (i < j) and (List[i] <= base):
+                i = i + 1
+            List[j] = List[i]
+        List[i] = base
+        QuickSort(List, start, i - 1)
+        QuickSort(List, j + 1, end)
+    return List
+
 def pad8(text):
     while len(text) % 8 != 0:
         text += ' '
     return text
 
 def CreateSalt(length=32):
-    chars = r"QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890~`_-+=|\{}[]:;'<,>.?/!@#$%^&*()"
+    chars = r"QWERTYUIOPASDFGHJKLZXCVBNMqwertyuiopasdfghjklzxcvbnm1234567890~`_-+=|\\{}[]:;'<,>.?/!@#$%^&*()"
     IReturn = ""
     while len(IReturn) != 32:
         IReturn += chars[random.randint(0, len(chars) - 1)]

@@ -117,3 +117,6 @@ pyvenv.cfg
 
 node_modules
 static
+
+data/config.json
+file
