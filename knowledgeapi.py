@@ -10,6 +10,8 @@ import utils
 import re
 import time
 from urllib.parse import urlencode
+import datetime
+import random
 
 @app.route("/api/knowledgefruits/serverinfo/knowledgefruits")
 @app.route("/api/knowledgefruits/serverinfo")
@@ -200,6 +202,7 @@ def kf_texturesinfo(args):
             "errorMessage": "参数格式错误"
         }), mimetype='application/json; charset=utf-8', status=403)
     Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
+    Args.pop("isPrivate", None)
     content = [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][0]
     for i in [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
         content = content & i
@@ -328,3 +331,471 @@ def kf_invalidate():
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
         return Response(status=204)
+
+@app.route("/api/knowledgefruits/profile/<profileid>/", methods=["GET"])
+def kf_profile_info(profileid):
+    result = model.getprofile_id(profileid)
+    if not result:
+        return Response(json.dumps({
+            "error": "ForbiddenOperationException",
+            "errorMessage": "no such profile."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    return Response(json.dumps(model.kf_format_profile(result.get())), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/profile/<profileid>/skin", methods=["GET"])
+def kf_profile_skin(profileid):
+    result = model.getprofile_id(profileid)
+    if not result:
+        return Response(json.dumps({
+            "error": "ForbiddenOperationException",
+            "errorMessage": "no such profile."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = result.get()
+    if not data.skin:
+        return Response(json.dumps({
+            "error": "ForbiddenOperationException",
+            "errorMessage": "the profile has no any skin."
+        }), status=403)
+    return Response(json.dumps(model.kf_format_textures(model.gettexture(data.skin))), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/profile/<profileid>/cape", methods=["GET"])
+def kf_profile_cape(profileid):
+    result = model.getprofile_id(profileid)
+    if not result:
+        return Response(json.dumps({
+            "error": "ForbiddenOperationException",
+            "errorMessage": "no such profile."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = result.get()
+    if not data.cape:
+        return Response(json.dumps({
+            "error": "ForbiddenOperationException",
+            "errorMessage": "the profile has no any cape."
+        }), status=403)
+    return Response(json.dumps(model.kf_format_textures(model.gettexture(data.cape))), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/profile/<profileid>/skin/change", methods=["POST"])
+def kf_profile_skin_change(profileid):
+    if request.is_json:
+        data = request.json
+        result = model.getprofile_id(profileid)
+        if not result:
+            return Response(json.dumps({
+                "error": "ForbiddenOperationException",
+                "errorMessage": "no such profile."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+        result = result.get()
+        accessToken = data.get("accessToken")
+
+        if not accessToken:
+            return Response(json.dumps({
+                "error": "ForbiddenOperationException",
+                "errorMessage": "no such profile."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+
+        if Token.is_validate_strict(accessToken):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+
+        user = Token.getuser_byaccessToken(accessToken)
+
+        if model.isBanned(user):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+
+        texture = model.gettexture(data.get("texture"))
+
+        if not texture:
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+
+        if texture.isPrivate:
+            if texture.userid != user.uuid:
+                return Response(json.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }), status=403, mimetype='application/json; charset=utf-8')
+
+        if texture.type != "skin":
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        
+        if result.skin == texture.textureid:
+            return Response(status=204)
+        
+        result.skin = texture.textureid
+        result.save()
+        return Response(status=204)
+
+@app.route("/api/knowledgefruits/profile/<profileid>/cape/change", methods=["POST"])
+def kf_profile_cape_change(profileid):
+    if request.is_json:
+        data = request.json
+        result = model.getprofile_id(profileid)
+        if not result:
+            return Response(json.dumps({
+                "error": "ForbiddenOperationException",
+                "errorMessage": "no such profile."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+        result = result.get()
+        accessToken = data.get("accessToken")
+
+        if not accessToken:
+            return Response(json.dumps({
+                "error": "ForbiddenOperationException",
+                "errorMessage": "no such profile."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+
+        if Token.is_validate_strict(accessToken):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+
+        user = Token.getuser_byaccessToken(accessToken)
+
+        if model.isBanned(user):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8') 
+
+        texture = model.gettexture(data.get("texture"))
+
+        if not texture:
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+
+        if texture.isPrivate:
+            if texture.userid != user.uuid:
+                return Response(json.dumps({
+                    'error' : "ForbiddenOperationException",
+                    'errorMessage' : "Invalid token."
+                }), status=403, mimetype='application/json; charset=utf-8')
+
+        if texture.type != "cape":
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        
+        if result.cape == texture.textureid:
+            return Response(status=204)
+        
+        result.cape = texture.textureid
+        result.change_time = datetime.datetime.now()
+        result.save()
+        return Response(status=204)
+
+@app.route("/api/knowledgefruits/group")
+def kf_group_root():
+    return Response(json.dumps({
+        "group_number": len(model.group.select()),
+    }), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/group/interfaces")
+def kf_group_interfaces():
+    return Response(json.dumps([
+        "create",
+        "report",
+        "report.join",
+        "signout"
+    ]), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/group/interfaces/create", methods=["POST"])
+def kf_group_interfaces_create():
+    if request.is_json:
+        data = request.json
+        name = data.get("name")
+        joinway = data.get("joinway", "public_join")
+        if joinway not in ["public_join", "public_join_review", "private"]:
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        if not re.match(r"[a-zA-Z0-9\u4E00-\u9FA5_-]{4,16}$", name):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        if model.group.select().where(model.group.name == name):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        
+        accessToken = data.get("accessToken")
+        clientToken = data.get("clientToken")
+        if not accessToken:
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        if Token.is_validate_strict(accessToken, clientToken):
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        token = Token.gettoken_strict(accessToken, clientToken)
+        user_uuid = model.getuser_uuid(token.get("user")).uuid
+        new_group = model.group(name=name, creater=user_uuid, manager=user_uuid, create_date=datetime.datetime.now(), joinway=joinway)
+        new_group.save()
+        new_manager = model.member(user=user_uuid, group=new_group.id, permission="super_manager")
+        return Response(json.dumps({
+            "groupId": new_group.uuid,
+            "timestamp": new_group.create_date.timestamp()
+        }), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/group/interfaces/report/join/<group_id>", methods=['POST'])
+def kf_group_interfaces_report_join(group_id):
+    if not request.is_json:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = request.json
+
+    accessToken = data.get("accessToken")
+    clientToken = data.get("clientToken")
+    if not accessToken:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    if Token.is_validate_strict(accessToken, clientToken):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    token = Token.gettoken_strict(accessToken, clientToken)
+    user_uuid = model.getuser_uuid(token.get("user")).uuid
+
+    if not model.group.select().where(model.group.uuid == group_id):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    group = model.group.select().where(model.group.uuid == group_id).get()
+    if group.joinway not in ["public_join", "public_join_review"]:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+
+    if group.joinway == "public_join":
+        new = model.member(user=user_uuid, group=group_id, permission="common_user")
+        new.save()
+        return Response(json.dumps(model.kf_format_group_public(group)), mimetype='application/json; charset=utf-8')
+    if group.joinway == "public_join_review":
+        review = model.review(user=user_uuid, group=group.id)
+        review.save()
+        return Response(json.dumps({
+            "reviewId": review.id
+        }), mimetype='application/json; charset=utf-8')
+    if group.joinway == 'private':
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/group/interfaces/signout/<group_id>", methods=['POST'])
+def kf_group_interfaces_signout(group_id):
+    if not request.is_json:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid request data."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = request.json
+
+    accessToken = data.get("accessToken")
+    clientToken = data.get("clientToken")
+    if not accessToken:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    if Token.is_validate_strict(accessToken, clientToken):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    token = Token.gettoken_strict(accessToken, clientToken)
+    user_uuid = model.getuser_uuid(token.get("user")).uuid
+
+    if not model.group.select().where(model.group.uuid == group_id):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    group: model.group = model.group.select().where(model.group.uuid == group_id).get()
+
+    # 是否在组内
+    if not model.member.select().where(
+        (model.member.group == group_id) &
+        (model.member.user == user_uuid) &
+        (model.member.is_disabled == False)
+    ):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    
+    known = model.member.select().where(
+        (model.member.group == group_id) &
+        (model.member.user == user_uuid) &
+        (model.member.is_disabled == False)
+    ).get()
+    if known.permission == "super_manager":
+        if not {"false": False, "true": True, request.args.get("force"): request.args.get("force")}[request.args.get("force")]:
+            return Response(json.dumps({
+                'error' : "ForbiddenOperationException",
+                'errorMessage' : "Invalid token."
+            }), status=403, mimetype='application/json; charset=utf-8')
+        else:
+            manager_result = model.member.select().where(
+                (model.member.is_disabled == False) &
+                (model.member.permission == "manager") &
+                (model.member.group == group_id)
+            )
+            if manager_result:
+                # 有其他管理员可以被任命为组管理员
+                # 随!机!选!择!
+                manager_selected = manager_result[random.randint(0, len(manager_result) - 1)]
+                manager_result.permission = "super_manager"
+                manager_result.save()
+                model.message(
+                    to=manager_result.user,
+                    title='您已成为组 "%(groupname)s" 的组管理员' % (group.name),
+                    body='因该组的原组管理员的退出, 您已成为该组的组管理员.',
+                    extra=json.dumps({
+                        "type": "group"
+                    })
+                )
+            else:
+                # 通知一波然后删掉, 解散的组不需要
+                now_member = model.member.select().where(
+                    (model.member.is_disabled == False) & 
+                    (model.member.group == group_id) &
+                    (model.member.user != user_uuid)
+                )
+                for i in now_member:
+                    model.message(
+                        to=i.user,
+                        title='您已被清理出组 "%(groupname)s"' % (group.name),
+                        body="因该组的原组管理员的退出, 您已被清理出该组."
+                    ).save()
+                model.member.delete().where(model.member.group == group_id).execute()
+    else:
+        manager_result = model.member.select().where(
+            (model.member.is_disabled == False) &
+            ((model.member.permission == "manager") | (model.member.permission == "super_manager")) &
+            (model.member.group == group_id)
+        )
+        known.is_disabled = True
+        known.move_times += 1
+        known.save()
+        for i in manager_result:
+            model.message(
+                to=i.user,
+                title='%(user)s 退出组 "%(groupname)s"' % (model.getuser_uuid(user_uuid).username, group.name),
+                body="因该成员的主动申请, 该成员已退出该组."
+            ).save()
+    return Response(status=204)
+
+@app.route("/api/knowledgefruits/message/", methods=['POST'])
+def kf_message():
+    if not request.is_json:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid request data."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = request.json
+
+    accessToken = data.get("accessToken")
+    clientToken = data.get("clientToken")
+    if not accessToken:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    if Token.is_validate_strict(accessToken, clientToken):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    token = Token.gettoken_strict(accessToken, clientToken)
+    user_uuid = model.getuser_uuid(token.get("user")).uuid
+
+    return Response(json.dumps([{
+        "title": i.title,
+        "body": i.body
+    } for i in model.message.select().where(model.message.to == user_uuid)]), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/message/unread", methods=['POST'])
+def kf_message_unread():
+    if not request.is_json:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid request data."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = request.json
+
+    accessToken = data.get("accessToken")
+    clientToken = data.get("clientToken")
+    if not accessToken:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    if Token.is_validate_strict(accessToken, clientToken):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    token = Token.gettoken_strict(accessToken, clientToken)
+    user_uuid = model.getuser_uuid(token.get("user")).uuid
+
+    return Response(json.dumps([{
+        "title": i.title,
+        "body": i.body
+    } for i in model.message.select().where((model.message.to == user_uuid) & (model.message.is_read == False))]), mimetype='application/json; charset=utf-8')
+
+@app.route("/api/knowledgefruits/message/already-read", methods=['POST'])
+def kf_message_alreadyRead():
+    if not request.is_json:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid request data."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    data = request.json
+
+    accessToken = data.get("accessToken")
+    clientToken = data.get("clientToken")
+    if not accessToken:
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    if Token.is_validate_strict(accessToken, clientToken):
+        return Response(json.dumps({
+            'error' : "ForbiddenOperationException",
+            'errorMessage' : "Invalid token."
+        }), status=403, mimetype='application/json; charset=utf-8')
+    token = Token.gettoken_strict(accessToken, clientToken)
+    user_uuid = model.getuser_uuid(token.get("user")).uuid
+
+    return Response(json.dumps([{
+        "title": i.title,
+        "body": i.body
+    } for i in model.message.select().where((model.message.to == user_uuid) & (model.message.is_read == True))]), mimetype='application/json; charset=utf-8')
+

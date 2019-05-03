@@ -7,13 +7,13 @@ from PIL import Image
 import datetime
 import time
 import os
+import uuid
 
 def chunk(l, n):
     return [l[i:i + n] for i in range(0, len(l), n)]
 
 def gettimestamp(date):
-    #return int(time.mktime(date.timetuple()))
-    return int(date)
+    return date.timestamp()
 
 def hex2bin(hexstring):
     #return ''.join([chr(int(b, 16)) for b in [hexstring[i:i+2] for i in range(0, len(hexstring), 2)]])
@@ -29,6 +29,9 @@ def bin2hex(sendbin):
       d = ord(i)
       e = e * 256 + d
     return hex(e)[2:]
+
+def shortid():
+    return str(uuid.uuid4()).split("-")[0]
 
 def factorial(n):
     result = n

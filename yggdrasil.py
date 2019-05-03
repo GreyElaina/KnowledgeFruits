@@ -7,6 +7,7 @@ import utils
 from urllib.parse import parse_qs, urlencode, urlparse
 import password
 import time
+import datetime
 
 @app.route("/api/knowledgefruits/serverinfo/yggdrasil")
 @app.route(config.const.base + '/', methods=['GET'])
@@ -84,7 +85,25 @@ def authenticate():
 
             if IReturn['selectedProfile'] == {}:
                 del IReturn['selectedProfile']
+            
+            user.last_login = datetime.datetime.now()
+            model.log_yggdrasil(
+                operational="authserver.authenticate",
+                user=user.uuid,
+                otherargs=json.dumps({
+                    "clientToken": ClientToken
+                }),
+                IP=request.remote_addr,
+                time=datetime.datetime.now()
+            ).save()
         else:
+            model.log_yggdrasil(
+                operational="authserver.authenticate",
+                user=user.uuid,
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid credentials. Invalid username or password."
@@ -105,6 +124,15 @@ def refresh():
         else:
             OldToken = Token.gettoken_strict(AccessToken)
         if not OldToken:
+            model.log_yggdrasil(
+                operational="authserver.refrush",
+                otherargs=json.dumps({
+                    "clientToken": data.get("clientToken")
+                }),
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid token."
@@ -112,6 +140,16 @@ def refresh():
             return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         
         if int(time.time()) >= OldToken.get("createTime") + (config.TokenTime.RefrushTime * config.TokenTime.TimeRange):
+            model.log_yggdrasil(
+                operational="authserver.refrush",
+                user=OldToken.get("user"),
+                otherargs=json.dumps({
+                    "clientToken": data.get("clientToken")
+                }),
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid token."
@@ -137,12 +175,32 @@ def refresh():
                 needuser = needuser.get()
                 # 验证完毕,有该角色.
                 if OldToken.get('bind'): # 如果令牌本来就绑定了角色
+                    model.log_yggdrasil(
+                        operational="authserver.refrush",
+                        user=User.uuid,
+                        otherargs=json.dumps({
+                            "clientToken": data.get("clientToken")
+                        }),
+                        IP=request.remote_addr,
+                        time=datetime.datetime.now(),
+                        successful=False
+                    ).save()
                     error = {
                         'error' : 'IllegalArgumentException',
                         'errorMessage' : "Access token already has a profile assigned."
                     }
                     return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
                 if needuser.createby != OldToken.get("user"): # 如果角色不属于用户
+                    model.log_yggdrasil(
+                        operational="authserver.refrush",
+                        user=User.uuid,
+                        otherargs=json.dumps({
+                            "clientToken": data.get("clientToken")
+                        }),
+                        IP=request.remote_addr,
+                        time=datetime.datetime.now(),
+                        successful=False
+                    ).save()
                     error = {
                         'error' : "ForbiddenOperationException",
                         'errorMessage' : "Attempting to bind a token to a role that does not belong to its corresponding user."
@@ -168,6 +226,18 @@ def refresh():
         if 'requestUser' in data:
             if data['requestUser']:
                 IReturn['user'] = model.format_user(User)
+
+        User.last_login = datetime.datetime.now()
+        model.log_yggdrasil(
+            operational="authserver.refrush",
+            user=User.uuid,
+            otherargs=json.dumps({
+                "clientToken": data.get("clientToken")
+            }),
+            IP=request.remote_addr,
+            time=datetime.datetime.now()
+        ).save()
+        
         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 
@@ -180,6 +250,15 @@ def validate():
         ClientToken = data.get("clientToken")
         result = Token.gettoken_strict(AccessToken, ClientToken)
         if not result:
+            model.log_yggdrasil(
+                operational="authserver.validate",
+                otherargs=json.dumps({
+                    "clientToken": data.get("clientToken")
+                }),
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid token."
@@ -187,12 +266,31 @@ def validate():
             return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
         else:
             if Token.is_validate_strict(AccessToken, ClientToken):
+                model.log_yggdrasil(
+                    user=result.get("user"),
+                    operational="authserver.validate",
+                    otherargs=json.dumps({
+                        "clientToken": data.get("clientToken")
+                    }),
+                    IP=request.remote_addr,
+                    time=datetime.datetime.now(),
+                    successful=False
+                ).save()
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid token."
                 }
                 return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             else:
+                model.log_yggdrasil(
+                    user=result.get("user"),
+                    operational="authserver.validate",
+                    otherargs=json.dumps({
+                        "clientToken": data.get("clientToken")
+                    }),
+                    IP=request.remote_addr,
+                    time=datetime.datetime.now(),
+                ).save()
                 return Response(status=204)
 
 @app.route(config.const.base + "/authserver/invalidate", methods=['POST'])
@@ -204,8 +302,26 @@ def invalidate():
 
         result = Token.gettoken(AccessToken, ClientToken)
         if result:
+            model.log_yggdrasil(
+                operational="authserver.invalidate",
+                user=result.get("user"),
+                otherargs=json.dumps({
+                    "clientToken": data.get("clientToken")
+                }),
+                IP=request.remote_addr,
+                time=datetime.datetime.now()
+            ).save()
             cache.delete(".".join(['token', AccessToken]))
         else:
+            model.log_yggdrasil(
+                operational="authserver.invalidate",
+                otherargs=json.dumps({
+                    "clientToken": data.get("clientToken")
+                }),
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             if ClientToken:
                 error = {
                     'error' : "ForbiddenOperationException",
@@ -229,6 +345,12 @@ def signout():
         passwd = data['password']
         result = model.getuser(email)
         if not result:
+            model.log_yggdrasil(
+                operational="authserver.signout",
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             error = {
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "Invalid credentials. Invalid username or password."
@@ -249,12 +371,25 @@ def signout():
                 }
                 return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
-                result = Token.getalltoken(result)
-                if result:
-                    for i in result:
+                Token_result = Token.getalltoken(result)
+                if Token_result:
+                    for i in Token_result:
                         cache.delete(i)
+                model.log_yggdrasil(
+                    operational="authserver.signout",
+                    user=result.uuid,
+                    IP=request.remote_addr,
+                    time=datetime.datetime.now()
+                ).save()
                 return Response(status=204)
             else:
+                model.log_yggdrasil(
+                    operational="authserver.signout",
+                    user=result.uuid,
+                    IP=request.remote_addr,
+                    time=datetime.datetime.now(),
+                    successful=False
+                ).save()
                 error = {
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
@@ -301,13 +436,32 @@ def joinserver():
                     "selectedProfile": data['selectedProfile'],
                     "remoteIP": request.remote_addr
                 }, ttl=config.ServerIDOutTime)
+                model.log_yggdrasil(
+                    operational="sessionserver.session.minecraft.join",
+                    user=token.get("user"),
+                    IP=request.remote_addr,
+                    time=datetime.datetime.now()
+                ).save()
                 return Response(status=204)
             else:
+                model.log_yggdrasil(
+                    operational="sessionserver.session.minecraft.join",
+                    user=token.get("user"),
+                    IP=request.remote_addr,
+                    time=datetime.datetime.now(),
+                    successful=False
+                ).save()
                 return Response(json.dumps({
                     'error' : "ForbiddenOperationException",
                     "errorMessage" : "Invalid token."
                 }), status=403, mimetype="application/json; charset=utf-8")
         else:
+            model.log_yggdrasil(
+                operational="sessionserver.session.minecraft.join",
+                IP=request.remote_addr,
+                time=datetime.datetime.now(),
+                successful=False
+            ).save()
             return Response(json.dumps({
                 'error' : "ForbiddenOperationException",
                 "errorMessage" : "Invalid token."
@@ -322,16 +476,34 @@ def PlayerHasJoined():
     Successful = False
     Data = cache.get(ServerID)
     if not Data:
+        model.log_yggdrasil(
+            operational="sessionserver.session.minecraft.hasJoined",
+            IP=request.remote_addr,
+            time=datetime.datetime.now(),
+            successful=False
+        ).save()
         return Response(status=204)
     TokenInfo = Token.gettoken(Data['accessToken'])
     ProfileInfo = model.getprofile_uuid_name(TokenInfo.get("bind"), name=PlayerName)
     if not TokenInfo or not ProfileInfo:
+        model.log_yggdrasil(
+            operational="sessionserver.session.minecraft.hasJoined",
+            IP=request.remote_addr,
+            time=datetime.datetime.now(),
+            successful=False
+        ).save()
         return Response(status=204)
 
     ProfileInfo = ProfileInfo.get()
 
     Successful = PlayerName == ProfileInfo.name and [True, RemoteIP == Data['remoteIP']][bool(RemoteIP)]
     if Successful:
+        model.log_yggdrasil(
+            operational="sessionserver.session.minecraft.hasJoined",
+            user=TokenInfo.get("user"),
+            IP=request.remote_addr,
+            time=datetime.datetime.now()
+        ).save()
         result = json.dumps(model.format_profile(
             ProfileInfo,
             Properties=True,
@@ -340,6 +512,13 @@ def PlayerHasJoined():
         ))
         return Response(result, mimetype="application/json; charset=utf-8")
     else:
+        model.log_yggdrasil(
+            operational="sessionserver.session.minecraft.hasJoined",
+            user=TokenInfo.get("user"),
+            IP=request.remote_addr,
+            time=datetime.datetime.now(),
+            successful=False
+        ).save()
         return Response(status=204)
     return Response(status=204)
 

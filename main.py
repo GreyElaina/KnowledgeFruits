@@ -12,8 +12,9 @@ import yggdrasil
 import texture
 
 if __name__ == '__main__':
+    model.db['log'].create_tables([model.log_kf, model.log_yggdrasil])
     if FileExists('./data/global.db'):
-        model.db['global'].create_tables([model.profile, model.user, model.textures])
+        model.db['global'].create_tables([model.profile, model.user, model.textures, model.banner, model.group, model.member, model.review, model.message, model.setting])
     if False in [FileExists(config.KeyPath.Private), FileExists(config.KeyPath.Public)]:
         print("Please use openssl to gen a rsa privkey and a rsa pubkey.")
         exit(1)

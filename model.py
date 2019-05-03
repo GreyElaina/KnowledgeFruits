@@ -10,13 +10,14 @@ from datetime import datetime
 import peewee
 import rsa
 
-import utils as base
+
+import utils
 import password
 from database import db
-from base import config, Token
 
+config = utils.Dict2Object(__import__("json").loads(open("./data/config.json").read()))
 class user(peewee.Model):
-    uuid = peewee.CharField(default=str(uuid.uuid4()).replace("-", ""), index=True)
+    uuid = peewee.CharField(default=(lambda: str(uuid.uuid4()).replace("-", ""))(), index=True)
     username = peewee.CharField(null=True)
     head = peewee.CharField(null=True)
     email = peewee.CharField()
@@ -66,7 +67,7 @@ class banner(peewee.Model):
         database = db['global']
 
 class group(peewee.Model):
-    uuid = peewee.CharField(default=base.shortid())
+    id = peewee.CharField(default=utils.shortid())
     name = peewee.CharField()
     creater = peewee.CharField()
     manager = peewee.CharField()
@@ -84,6 +85,11 @@ class group(peewee.Model):
     enable_public_joinhistory = peewee.BooleanField(default=True)
     enable_public_memberlist = peewee.BooleanField(default=False)
 
+    #joinway:
+    #1.public_join:任何人可加入
+    #2.public_join_review:需要管理员同意
+    #3.private:私有组,只能于enable_invite为True时通过内部人员邀请进入
+
     class Meta:
         database = db['global']
 
@@ -91,7 +97,7 @@ class member(peewee.Model):
     user = peewee.CharField()
     group = peewee.CharField()
     permission = peewee.CharField()
-    last_joinserver = peewee.TimestampField(utc=True)
+    last_joinserver = peewee.TimestampField(utc=True, null=True)
 
     kick_others_number = peewee.IntegerField(default=0) # 你难道会记得你踢了几个人吗? KF:you.kick_others_number, 我是统计主义者.
     managedown_number = peewee.IntegerField(default=0) # ouch! 你怎么回事啊,又被下管理了?
@@ -107,6 +113,34 @@ class member(peewee.Model):
     
     is_disabled = peewee.BooleanField(default=False) # 我可是...能够记住一切的一切的哦, 不要逃走哦...
     
+    # common_user
+    # manager
+    # super_manager
+    class Meta:
+        database = db['global']
+
+class review(peewee.Model):
+    id = peewee.CharField(default=utils.shortid())
+    user = peewee.CharField()
+    group = peewee.CharField()
+    time = peewee.TimestampField(utc=True)
+    extra = peewee.CharField(null=True)
+    isEnable = peewee.BooleanField(default=True)
+    isAccessed = peewee.BooleanField(default=False)
+
+    class Meta:
+        database = db['global']
+
+class message(peewee.Model):
+    messageid = peewee.CharField(default=utils.shortid())
+    from_ = peewee.CharField(default="KnowledgeFruits Daemon", column_name='from')
+    to = peewee.CharField()
+    is_read = peewee.BooleanField(default=False)
+    
+    title = peewee.CharField()
+    body = peewee.CharField()
+    extra = peewee.CharField(null=True)
+
     class Meta:
         database = db['global']
 
@@ -121,19 +155,20 @@ class setting(peewee.Model):
         database = db['global']
 
 class log_yggdrasil(peewee.Model):
-    operational = peewee.CharField()
-    user = peewee.CharField()
+    operational = peewee.CharField() # 操作
+    user = peewee.CharField(null=True)
     profile = peewee.CharField(null=True)
     otherargs = peewee.CharField(null=True)
     IP = peewee.CharField()
     time = peewee.TimestampField(utc=True)
+    successful = peewee.BooleanField(default=True)
 
     class Meta:
         database = db['log']
 
 class log_kf(peewee.Model):
-    operational = peewee.CharField()
-    user = peewee.CharField()
+    operational = peewee.CharField() # 操作
+    user = peewee.CharField(null=True)
     profile = peewee.CharField(null=True)
     otherargs = peewee.CharField(null=True)
     IP = peewee.CharField()
@@ -152,7 +187,7 @@ def format_texture(profile, unMetaData=False, BetterData=False):
         else:
             unMetaData = True
     IReturn = {
-        "timestamp" : base.gettimestamp(profile.time),
+        "timestamp" : utils.gettimestamp(profile.create_time),
         'profileId' : profile.profile_id,
         'profileName' : profile.name,
         'textures' : {}
@@ -199,6 +234,16 @@ def getskintype_profile(iprofile):
         return False
     texture = textures.get(textures.textureid == iprofile.skin)
     return texture.type
+
+def kf_format_group_public(g: group):
+    return {
+        "id": g.id,
+        "name": g.name,
+        "creater": g.creater,
+        "manager": g.manager,
+        "createTime": g.create_date.timestamp(),
+        "joinway": g.joinway
+    }
 
 def getskinmodel_profile(iprofile):
     if not iprofile.skin:
@@ -420,39 +465,56 @@ def kf_format_textures(t):
 
 def NewProfile(Playername, User, Png, Type='SKIN', Model="STEVE"):
     Email = User.email
-    p = profile(uuid=base.OfflinePlayerUUID(Playername).replace('-',''), name=Playername, hash=base.PngBinHash(config.texturepath + Png), createby=Email, type=Type, model=Model)
+    p = profile(profile_id=(lambda: str(uuid.uuid4()).replace("-", ""))(), uuid=utils.OfflinePlayerUUID(Playername).replace('-',''), name=Playername, hash=utils.PngBinHash(config.texturepath + Png), createby=Email, type=Type, model=Model)
     print(config.texturepath + Png)
-    os.rename(config.texturepath + Png, config.texturepath + base.PngBinHash(config.texturepath + Png) + ".png")
+    os.rename(config.texturepath + Png, config.texturepath + utils.PngBinHash(config.texturepath + Png) + ".png")
     p.save()
 
 def NewUser(email, passwd):
-    salt = base.CreateSalt(length=8)
+    salt = utils.CreateSalt(length=8)
     user(
+        uuid=(lambda: str(uuid.uuid4()).replace("-", ""))(),
         email=email,
         password=password.crypt(passwd, salt),
-        passwordsalt=salt
+        passwordsalt=salt,
+        last_login=0.0,
+        last_joinserver=0.0,
+        register_time=datetime.now()
     ).save()
 
 def CreateProfile(name, createby, SKIN=None, CAPE=None):
-    OfflineUUID = base.OfflinePlayerUUID(name).replace("-", "")
+    OfflineUUID = utils.OfflinePlayerUUID(name).replace("-", "")
     db = profile(uuid=OfflineUUID, name=name, createby=createby, skin=SKIN, cape=CAPE)
     db.save()
 
 def NewTexture(name, user, photoname, Type="SKIN", model="STEVE"):
-    data = textures(userid=user.uuid, photoname=photoname, type=Type, model=model, hash=base.PngBinHash(name))
+    data = textures(textureid=(lambda: str(uuid.uuid4()).replace("-", ""))(), userid=user.uuid, photoname=photoname, type=Type, model=model, hash=utils.PngBinHash(name))
     data.save()
     return data.textureid
 
-if __name__ == '__main__':
+def yggdrasil_test():
     #db['global'].create_tables([profile, token, user, textures])
     NewUser("test1@to2mbn.org", "111111")
+    NewUser("test2@to2mbn.org", "222222")
+    NewUser("test3@to2mbn.org", "333333")
+    char1skin = NewTexture("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",user.get(user.email == "test2@to2mbn.org"),photoname="character1-skin")
+    char1cape = NewTexture("./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",user.get(user.email == "test2@to2mbn.org"),photoname="character1-cape",Type="CAPE")
+    character2_skin = NewTexture("./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",user.get(user.email == "test3@to2mbn.org"),photoname="character2-skin",model="ALEX")
+    character3_cape = NewTexture("./data/texture/ddcf7d09723e799e59d7f19807d0bf5e3a2c044ce17e76a48b8ac4d27c0b16e0.png",user.get(user.email == "test3@to2mbn.org"),photoname="character3-cape",Type="CAPE")
+    CreateProfile("character1","test2@to2mbn.org",SKIN=char1skin,CAPE=char1cape)
+    CreateProfile("character2","test3@to2mbn.org",SKIN=character2_skin)
+    CreateProfile("character3","test3@to2mbn.org",CAPE=character3_cape)
+
+if __name__ == "__main__":
+    #db['global'].create_tables([profile, user, textures, banner, group, member, review, message, setting])
+    #NewUser("test1@to2mbn.org", "111111")
     #NewUser("test2@to2mbn.org", "222222")
     #NewUser("test3@to2mbn.org", "333333")
-    char1skin = NewTexture("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-skin")
-    #Chenwe_i_lin_cape = NewTexture("./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",user.get(user.email == "1846913566@qq.com"),photoname="Chenwe_i_lin-cape",Type="CAPE")
-    #testplayer_skin = NewTexture("./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer-skin",model="ALEX")
-    #testplayer3_cape = NewTexture("./data/texture/ddcf7d09723e799e59d7f19807d0bf5e3a2c044ce17e76a48b8ac4d27c0b16e0.png",user.get(user.email == "test3@to2mbn.org"),photoname="testplayer3-cape",Type="CAPE")
-    #CreateProfile("Chenwe_i_lin","1846913566@qq.com",SKIN="74da44e9a1404ab79312dbc89b51a9f0",CAPE="11fdd8a1db50406a894f0a3a08295bd7")
-    #CreateProfile("testplayer","test3@to2mbn.org",SKIN="dce9f17b2e8045febb75d80020bbfd53")
-    #CreateProfile("testplayer1","test3@to2mbn.org",CAPE="092fc3923f1144239a4183b34d1dc082")
-    db['global'].create_tables([token])
+    #char1skin = NewTexture("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png",user.get(user.email == "test2@to2mbn.org"),photoname="character1-skin")
+    #char1cape = NewTexture("./data/texture/8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png",user.get(user.email == "test2@to2mbn.org"),photoname="character1-cape",Type="CAPE")
+    #character2_skin = NewTexture("./data/texture/490bd08f1cc7fce67f2e7acb877e5859d1605f4ffb0893b07607deae5e05becc.png",user.get(user.email == "test3@to2mbn.org"),photoname="character2-skin",model="ALEX")
+    #character3_cape = NewTexture("./data/texture/ddcf7d09723e799e59d7f19807d0bf5e3a2c044ce17e76a48b8ac4d27c0b16e0.png",user.get(user.email == "test3@to2mbn.org"),photoname="character3-cape",Type="CAPE")
+    #CreateProfile("character1","test2@to2mbn.org",SKIN="65c15ced19134c4582fae4792a2fdd6c",CAPE="7e534ac7d46e4a8ab38e49eebc08f1bc")
+    #CreateProfile("character2","test3@to2mbn.org",SKIN="fa609f3ab7df43e09f1cc4c8a73d4517")
+    #CreateProfile("character3","test3@to2mbn.org",CAPE="0160b5a9f07c4f548b1fc64691d09081")
+    pass

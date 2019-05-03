@@ -15,7 +15,7 @@ class TokenCache():
         result = self.CacheObject.get(self._format(accessToken))
         if not result:
             return False
-        return model.user.get(model.user.email == result['user'])
+        return model.getuser_uuid(result)
     
     def getalltoken(self, User):
         result = []
@@ -64,7 +64,7 @@ class TokenCache():
             return False
         return result
 
-config = utils.Dict2Object(json.loads(open("./data/config.json").read()))
+config = utils.Dict2Object(__import__("json").loads(open("./data/config.json").read()))
 raw_config = json.loads(open("./data/config.json").read())
 app = Flask("main")
 cache = cacheout.Cache(ttl=0, maxsize=32768)
