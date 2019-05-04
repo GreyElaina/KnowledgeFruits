@@ -59,7 +59,7 @@ class textures(peewee.Model):
 
 class banner(peewee.Model):
     user = peewee.CharField()
-    profilename = peewee.CharField(null=True)
+    profile = peewee.CharField(null=True)
     create_time = peewee.TimestampField(utc=True)
     group = peewee.CharField(default="global")
     until = peewee.TimestampField(default=None, utc=True) # 传入一个utc整数
@@ -102,7 +102,7 @@ class member(peewee.Model):
     kick_others_number = peewee.IntegerField(default=0) # 你难道会记得你踢了几个人吗? KF:you.kick_others_number, 我是统计主义者.
     managedown_number = peewee.IntegerField(default=0) # ouch! 你怎么回事啊,又被下管理了?
     manageup_number = peewee.IntegerField(default=0)
-    move_times = peewee.IntegerField(default=0) # 移动次数...? 是被飞机次数哒, 我究竟死了多少次了?你不要过来啊
+    move_times = peewee.IntegerField(default=0) # 移动次数,指成员的is_disabled变化次数,注意,当加群成功时,is_disabled不会改变.
     permission_used_times = peewee.IntegerField(default=0) # 权利蒙蔽人的双眼,只有数据才能显出其罪恶本质....
     join_times = peewee.IntegerField(default=1) # 你进来几次了?
     be_kicked_times_total = peewee.IntegerField(default=0)

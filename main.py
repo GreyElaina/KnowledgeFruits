@@ -10,6 +10,7 @@ import customskinapi
 import knowledgeapi
 import yggdrasil
 import texture
+import YggdrasilGroup
 
 if __name__ == '__main__':
     model.db['log'].create_tables([model.log_kf, model.log_yggdrasil])
