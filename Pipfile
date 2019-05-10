@@ -1,0 +1,30 @@
+[[source]]
+name = "pypi"
+url = "https://pypi.org/simple"
+verify_ssl = true
+
+[dev-packages]
+
+[packages]
+cacheout = "==0.11.1"
+certifi = "==2019.3.9"
+chardet = "==3.0.4"
+click = "==7.0"
+flask = "==1.0.2"
+idna = "==2.8"
+itsdangerous = "==1.1.0"
+jinja2 = "==2.10"
+markupsafe = "==1.1.1"
+paste = "==3.0.8"
+peewee = "==3.9.4"
+pillow = "==6.0.0"
+pyasn1 = "==0.4.5"
+requests = "==2.21.0"
+rsa = "==4.0"
+six = "==1.12.0"
+urllib3 = "==1.24.1"
+waitress = "==1.2.1"
+werkzeug = "==0.14.1"
+
+[requires]
+python_version = "3.6"

@@ -70,6 +70,7 @@ def authenticate():
                 "clientToken": ClientToken,
                 "bind": Profileresult.get().uuid if notDoubleProfile else None,
                 "user": user.uuid,
+                "group": "global",
                 "createTime": int(time.time())
             }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
 
@@ -215,6 +216,7 @@ def refresh():
             "clientToken": OldToken.get('clientToken'),
             "bind": TokenSelected,
             "user": OldToken.get("user"),
+            "group": "global",
             "createTime": int(time.time())
         }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
 

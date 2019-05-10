@@ -120,3 +120,9 @@ static
 
 data/config.json
 file
+data/texture.zip
+test/steve.png
+test/node_modules
+
+coverage
+./.nyc_output

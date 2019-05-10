@@ -68,6 +68,34 @@
             "isSigner": true
         } 
     },
+    "GroupLimit": {
+        "EachUser": {
+            "create_group_number_limit": {
+                "enable": false,
+                "limit": 3
+            },
+            "created_group_member_number_limit": {
+                "enable": false,
+                "limit": [8, 20]
+            },
+            "created_group_member_deputy_manager_number_limit": {
+                "enable": true,
+                "limit": 3
+            },
+            "created_group_member_deputy_manager_can_ban_others": {
+                "enable": false
+            },
+            "created_group_member_deputy_manager_can_ban_common_max_date": {
+                "limit": [1, 259200]
+            },
+            "created_group_manager_can_handover_authority_to_common_user": {
+                "enable": true
+            },
+            "created_group_delete_when_member_number_be_zero": {
+                "enable": false
+            }
+        }
+    },
     "UploadSkin": {
         "security": {
             "size": {
@@ -76,16 +104,7 @@
             }
         }
     },
-    "OAuth": {
-        "github": {
-            "access_token_url": "https://github.com/login/oauth/access_token",
-            "authorize_url": "https://github.com/login/oauth/authorize",
-            "user": "https://api.github.com/user",
-            "email": "https://api.github.com/user/emails",
-            "client_id": "cafc6b66d1a95033e6ad",
-            "client_secret": "7c322f146ca7c4759c9fd900a930b35b7a65f1ad",
-            "scope": "user:email",
-            "icon": "github"
-        }
+    "GetSkin": {
+        "AutoMojang": true
     }
 }
