@@ -8,6 +8,7 @@ from urllib.parse import parse_qs, urlencode, urlparse
 import password
 import time
 import datetime
+import Exceptions
 
 @app.route("/api/knowledgefruits/serverinfo/yggdrasil")
 @app.route(config.const.base + '/', methods=['GET'])
@@ -26,11 +27,7 @@ def authenticate():
         data = request.json
         user = model.getuser(data['username'])
         if not user:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidCredentials()
         '''if user.permission == 0:
             return Response(json.dumps({
                 'error' : "ForbiddenOperationException",
@@ -39,11 +36,7 @@ def authenticate():
         if not cache.get(".".join(['lock', user.email])):
             cache.set(".".join(['lock', user.email]), "LOCKED", ttl=config.AuthLimit)
         else:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidCredentials()
 
         SelectedProfile = {}
         AvailableProfiles = []
@@ -105,11 +98,7 @@ def authenticate():
                 time=datetime.datetime.now(),
                 successful=False
             ).save()
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidCredentials()
         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
 
 @app.route(config.const.base + '/authserver/refresh', methods=['POST'])
@@ -134,11 +123,7 @@ def refresh():
                 time=datetime.datetime.now(),
                 successful=False
             ).save()
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         
         if int(time.time()) >= OldToken.get("createTime") + (config.TokenTime.RefrushTime * config.TokenTime.TimeRange):
             model.log_yggdrasil(
@@ -151,11 +136,7 @@ def refresh():
                 time=datetime.datetime.now(),
                 successful=False
             ).save()
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         User = model.getuser_uuid(OldToken.get("user"))
         TokenSelected = OldToken.get("bind")
         if TokenSelected:
@@ -166,11 +147,7 @@ def refresh():
             PostProfile = data['selectedProfile']
             needuser = model.getprofile_id_name(PostProfile['id'], PostProfile['name'])
             if not needuser: # 验证客户端提供的角色信息
-                error = {
-                    'error' : "IllegalArgumentException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=400, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
                 # 角色不存在.
             else:
                 needuser = needuser.get()
@@ -261,11 +238,7 @@ def validate():
                 time=datetime.datetime.now(),
                 successful=False
             ).save()
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         else:
             if Token.is_validate_strict(AccessToken, ClientToken):
                 model.log_yggdrasil(
@@ -278,11 +251,7 @@ def validate():
                     time=datetime.datetime.now(),
                     successful=False
                 ).save()
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
             else:
                 model.log_yggdrasil(
                     user=result.get("user"),
@@ -325,11 +294,7 @@ def invalidate():
                 successful=False
             ).save()
             if ClientToken:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
         #User = model.user.get(email=result.email)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
@@ -353,11 +318,7 @@ def signout():
                 time=datetime.datetime.now(),
                 successful=False
             ).save()
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidCredentials()
         else:
             '''if result.permission == 0:
                 return Response(json.dumps({
@@ -367,11 +328,7 @@ def signout():
             if not cache.get(".".join(['lock', result.email])):
                 cache.set(".".join(['lock', result.email]), "LOCKED", ttl=config.AuthLimit)
             else:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidCredentials()
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 Token_result = Token.getalltoken(result)
                 if Token_result:
@@ -392,11 +349,7 @@ def signout():
                     time=datetime.datetime.now(),
                     successful=False
                 ).save()
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid credentials. Invalid username or password."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidCredentials()
 
 # /authserver
 
@@ -417,19 +370,13 @@ def joinserver():
             # uuid = token.bind
             token = Token.gettoken_strict(AccessToken, ClientToken)
             if not token:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    "errorMessage" : "Invalid token."
-                }), status=403, mimetype="application/json; charset=utf-8")
+                raise Exceptions.InvalidToken()
             if token.get('bind'):
                 result = model.getprofile_uuid(token.get('bind'))
                 if not result:
                     return Response(status=404)
             else:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    "errorMessage" : "Invalid token."
-                }), status=403, mimetype="application/json; charset=utf-8")
+                raise Exceptions.InvalidToken()
             player = model.getprofile(result.get().name).get()
             playeruuid = player.profile_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
@@ -453,10 +400,7 @@ def joinserver():
                     time=datetime.datetime.now(),
                     successful=False
                 ).save()
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    "errorMessage" : "Invalid token."
-                }), status=403, mimetype="application/json; charset=utf-8")
+                raise Exceptions.InvalidToken()
         else:
             model.log_yggdrasil(
                 operational="sessionserver.session.minecraft.join",
@@ -464,10 +408,7 @@ def joinserver():
                 time=datetime.datetime.now(),
                 successful=False
             ).save()
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                "errorMessage" : "Invalid token."
-            }), status=403, mimetype="application/json; charset=utf-8")
+            raise Exceptions.InvalidToken()
 
 @app.route(config.const.base + "/sessionserver/session/minecraft/hasJoined", methods=['GET'])
 def PlayerHasJoined():

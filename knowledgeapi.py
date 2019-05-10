@@ -12,6 +12,8 @@ import time
 from urllib.parse import urlencode
 import datetime
 import random
+import Exceptions
+import group as G
 
 @app.route("/api/knowledgefruits/serverinfo/knowledgefruits")
 @app.route("/api/knowledgefruits/serverinfo")
@@ -319,11 +321,7 @@ def kf_invalidate():
             cache.delete(".".join(['token', AccessToken]))
         else:
             if ClientToken:
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
         #User = model.user.get(email=result.email)
         '''if User.permission == 0:
             return Response(simplejson.dumps({
@@ -394,39 +392,24 @@ def kf_profile_skin_change(profileid):
             }), status=403, mimetype='application/json; charset=utf-8') 
 
         if Token.is_validate_strict(accessToken):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8') 
+            raise Exceptions.InvalidToken() 
 
         user = Token.getuser_byaccessToken(accessToken)
 
         if model.isBanned(user):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8') 
+            raise Exceptions.InvalidToken() 
 
         texture = model.gettexture(data.get("texture"))
 
         if not texture:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
 
         if texture.isPrivate:
             if texture.userid != user.uuid:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
 
         if texture.type != "skin":
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         
         if result.skin == texture.textureid:
             return Response(status=204)
@@ -455,26 +438,17 @@ def kf_profile_cape_change(profileid):
             }), status=403, mimetype='application/json; charset=utf-8') 
 
         if Token.is_validate_strict(accessToken):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8') 
+            raise Exceptions.InvalidToken() 
 
         user = Token.getuser_byaccessToken(accessToken)
 
         if model.isBanned(user):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8') 
+            raise Exceptions.InvalidToken() 
 
         texture = model.gettexture(data.get("texture"))
 
         if not texture:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
 
         if texture.isPrivate:
             if texture.userid != user.uuid:
@@ -484,10 +458,7 @@ def kf_profile_cape_change(profileid):
                 }), status=403, mimetype='application/json; charset=utf-8')
 
         if texture.type != "cape":
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         
         if result.cape == texture.textureid:
             return Response(status=204)
@@ -519,33 +490,18 @@ def kf_group_interfaces_create():
         name = data.get("name")
         joinway = data.get("joinway", "public_join")
         if joinway not in ["public_join", "public_join_review", "private"]:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         if not re.match(r"[a-zA-Z0-9\u4E00-\u9FA5_-]{4,16}$", name):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         if model.group.select().where(model.group.name == name):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         
         accessToken = data.get("accessToken")
         clientToken = data.get("clientToken")
         if not accessToken:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         if Token.is_validate_strict(accessToken, clientToken):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         token = Token.gettoken_strict(accessToken, clientToken)
         user_uuid = model.getuser_uuid(token.get("user")).uuid
         new_group = model.group(name=name, creater=user_uuid, manager=user_uuid, create_date=datetime.datetime.now(), joinway=joinway)
@@ -559,48 +515,23 @@ def kf_group_interfaces_create():
 @app.route("/api/knowledgefruits/group/interfaces/report/join/<group_id>", methods=['POST'])
 def kf_group_interfaces_report_join(group_id):
     if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     data = request.json
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
     if not model.group.select().where(model.group.uuid == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    group = model.group.select().where(model.group.uuid == group_id).get()
+        raise Exceptions.InvalidToken()
+    group = G.get_group(group_id)
     if group.joinway not in ["public_join", "public_join_review"]:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
 
     if model.member.select().where(
         (model.member.is_disabled == False) &
         (model.member.user == user_uuid) &
         (model.member.group == group.id)
     ):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
 
     if group.joinway == "public_join":
         new = model.member(user=user_uuid, group=group_id, permission="common_user")
@@ -613,64 +544,22 @@ def kf_group_interfaces_report_join(group_id):
             "reviewId": review.id
         }), mimetype='application/json; charset=utf-8')
     if group.joinway == 'private':
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
 
 @app.route("/api/knowledgefruits/group/interfaces/signout/<group_id>", methods=['POST'])
 def kf_group_interfaces_signout(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
     if not model.group.select().where(model.group.uuid == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    group: model.group = model.group.select().where(model.group.uuid == group_id).get()
-
-    # 是否在组内
-    if not model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    ):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
+    group: model.group = G.get_group(group_id)
     
-    known = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    ).get()
+    known = G.get_member(group_id, user_uuid)
     if known.permission == "super_manager":
-        if not {"false": False, "true": True, request.args.get("force"): request.args.get("force")}[request.args.get("force")]:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }), status=403, mimetype='application/json; charset=utf-8')
+        if not data.get("force"):
+            raise Exceptions.InvalidToken()
         else:
             manager_result = model.member.select().where(
                 (model.member.is_disabled == False) &
@@ -724,28 +613,10 @@ def kf_group_interfaces_signout(group_id):
 
 @app.route("/api/knowledgefruits/message/", methods=['POST'])
 def kf_message():
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
     return Response(json.dumps([{
         "title": i.title,
         "body": i.body
@@ -753,28 +624,10 @@ def kf_message():
 
 @app.route("/api/knowledgefruits/message/unread", methods=['POST'])
 def kf_message_unread():
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
     return Response(json.dumps([{
         "title": i.title,
         "body": i.body
@@ -782,28 +635,10 @@ def kf_message_unread():
 
 @app.route("/api/knowledgefruits/message/already-read", methods=['POST'])
 def kf_message_alreadyRead():
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
     return Response(json.dumps([{
         "title": i.title,
         "body": i.body
@@ -811,33 +646,10 @@ def kf_message_alreadyRead():
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>", methods=["POST"])
 def kf_group_interfaces_manage(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
 
     selectResult = model.member.select().where(
         (model.member.group == group_id) &
@@ -845,59 +657,18 @@ def kf_group_interfaces_manage(group_id):
         (model.member.is_disabled == False)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     selectResult = selectResult.get()
     return Response(status=[403, 204][selectResult.permission in ['manager', 'super_manager']])
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/kick/<kick_id>", methods=["POST"])
 def kf_group_interfaces_manage_kick(group_id, kick_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     selectResult = model.member.select().where(
         (model.member.group == group_id) &
@@ -905,10 +676,7 @@ def kf_group_interfaces_manage_kick(group_id, kick_id):
         (model.member.is_disabled == False)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     selectResult = selectResult.get()
     selectResult.is_disabled = True
     selectResult.move_times += 1
@@ -918,50 +686,12 @@ def kf_group_interfaces_manage_kick(group_id, kick_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/ban/<kick_id>/user", methods=["POST"])
 def kf_group_interfaces_manage_ban_user(group_id, kick_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     selectResult = model.member.select().where(
         (model.member.group == group_id) &
@@ -969,10 +699,7 @@ def kf_group_interfaces_manage_ban_user(group_id, kick_id):
         (model.member.is_disabled == False)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     selectResult = selectResult.get()
 
     ban = model.banner(
@@ -986,50 +713,12 @@ def kf_group_interfaces_manage_ban_user(group_id, kick_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/ban/<kick_id>/profile/<profile_id>", methods=["POST"])
 def kf_group_interfaces_manage_ban_profile(group_id, kick_id, profile_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     selectResult = model.member.select().where(
         (model.member.group == group_id) &
@@ -1037,10 +726,7 @@ def kf_group_interfaces_manage_ban_profile(group_id, kick_id, profile_id):
         (model.member.is_disabled == False)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     selectResult = selectResult.get()
 
     profile = model.profile.select().where(
@@ -1048,10 +734,7 @@ def kf_group_interfaces_manage_ban_profile(group_id, kick_id, profile_id):
         (model.profile.createby == user_uuid)
     )
     if not profile:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
 
     ban = model.banner(
         user=kick_id,
@@ -1065,63 +748,14 @@ def kf_group_interfaces_manage_ban_profile(group_id, kick_id, profile_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/manager/up/<user_id>", methods=["POST"])
 def kf_group_interfaces_manage_manager_up(group_id, user_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission != 'super_manager':
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    G.is_super_manager(group_id, user_id)
     
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_id) &
-        (model.member.permission == "common_user") &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
+    selectResult = G.get_member_common_user(group_id, user_id)
 
     selectResult.permission = "manager"
     selectResult.manageup_number += 1
@@ -1131,63 +765,14 @@ def kf_group_interfaces_manage_manager_up(group_id, user_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/manager/down/<user_id>", methods=["POST"])
 def kf_group_interfaces_manage_manager_down(group_id, user_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission != 'super_manager':
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    G.is_super_manager(group_id, user_id)
     
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_id) &
-        (model.member.permission == "manager") &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
+    selectResult = G.isManager(group_id, user_id)
 
     selectResult.permission = "common_user"
     selectResult.managedown_number += 1
@@ -1196,52 +781,15 @@ def kf_group_interfaces_manage_manager_down(group_id, user_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkban/", methods=["POST"])
 def kf_group_interfaces_manage_checkban(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
+    
     try:
-        page = int(request.args.get("range", 1))
+        page = int(data.get("range", 1))
     except ValueError:
         return Response(json.dumps({
             'error' : "ForbiddenOperationException",
@@ -1255,65 +803,24 @@ def kf_group_interfaces_manage_checkban(group_id):
             "length": x.until.timestamp() - x.create_time.timestamp(),
             ["user", "profile"][bool(x.profile)] : [x.profile, x.user][bool(x.profile)],
             "uuid": x.user
-        })(i) for i in model.banner.select().where(model.banner.group == group_id)[:15 * page]
+        })(i) for i in model.banner.select().where(model.banner.group == group_id)[15*(page - 1):15 * page]
     ]), mimetype='application/json; charset=utf-8')
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkban/<user_id>", methods=["POST"])
 def kf_group_interfaces_manage_checkban_user(group_id, user_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
 
     if model.member.select().where(
         (model.member.group == group_id) &
         (model.member.user == user_id) &
         (model.member.is_disabled == False)
     ):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
 
     return Response(json.dumps([
         (lambda x: {
@@ -1327,50 +834,12 @@ def kf_group_interfaces_manage_checkban_user(group_id, user_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     return Response(json.dumps([(lambda x: {
         "id": x.id,
@@ -1384,50 +853,12 @@ def kf_group_interfaces_manage_checkjoin(group_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/enabled", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_enabled(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     return Response(json.dumps([(lambda x: {
         "id": x.id,
@@ -1441,50 +872,12 @@ def kf_group_interfaces_manage_checkjoin_enabled(group_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/non-enabled", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_non_enabled(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     return Response(json.dumps([(lambda x: {
         "id": x.id,
@@ -1498,50 +891,12 @@ def kf_group_interfaces_manage_checkjoin_non_enabled(group_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/accessed", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_accessed(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     return Response(json.dumps([(lambda x: {
         "id": x.id,
@@ -1555,50 +910,12 @@ def kf_group_interfaces_manage_checkjoin_accessed(group_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/accessed", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_non_accessed(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
     
     return Response(json.dumps([(lambda x: {
         "id": x.id,
@@ -1612,60 +929,19 @@ def kf_group_interfaces_manage_checkjoin_non_accessed(group_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/<review_id>", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_info(group_id, review_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
 
     selectResult = model.review.select().where(
         (model.review.id == review_id) &
         (model.review.group == group_id)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     selectResult = selectResult.get()
     return Response(json.dumps({
         "id": selectResult.id,
@@ -1677,69 +953,24 @@ def kf_group_interfaces_manage_checkjoin_info(group_id, review_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/<review_id>/access", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_access(group_id, review_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user = model.getuser_uuid(token.get("user"))
-    user_uuid = model.getuser_uuid(token.get("user")).uuid
+    user_uuid = user.uuid
+    group = G.get_group(group_id)
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    group = model.group.select().where(model.group.id == group_id).get()
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    manager = selectResult
+    manager = G.isManager(group_id, user_uuid)
 
     selectResult = model.review.select().where(
         (model.review.id == review_id) &
         (model.review.group == group_id)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     selectResult = selectResult.get()
     if selectResult.isEnable != True:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     selectResult.isEnable = False
     selectResult.isAccessed = True
     if not model.member.select().where(
@@ -1783,69 +1014,24 @@ def kf_group_interfaces_manage_checkjoin_access(group_id, review_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/<review_id>/refuse", methods=["POST"])
 def kf_group_interfaces_manage_checkjoin_refuse(group_id, review_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user = model.getuser_uuid(token.get("user"))
-    user_uuid = model.getuser_uuid(token.get("user")).uuid
+    user_uuid = user.uuid
+    group = G.get_group(group_id)
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    group = model.group.select().where(model.group.id == group_id).get()
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    manager = selectResult
+    manager = G.isManager(group_id, user_uuid)
 
     selectResult = model.review.select().where(
         (model.review.id == review_id) &
         (model.review.group == group_id)
     )
     if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     selectResult = selectResult.get()
     if selectResult.isEnable != True:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     selectResult.isEnable = False
     selectResult.isAccessed = False
 
@@ -1870,53 +1056,13 @@ def kf_group_interfaces_manage_checkjoin_refuse(group_id, review_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/setting", methods=['POST'])
 def kf_group_interfaces_manage_setting(group_id):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
-    user = model.getuser_uuid(token.get("user"))
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
+    group = G.get_group(group_id)
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    group = model.group.select().where(model.group.id == group_id).get()
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    #manager = selectResult
+    selectResult = G.isManager(group_id, user_uuid)
 
     return Response(json.dumps({
         "name": group.name,
@@ -1931,112 +1077,51 @@ def kf_group_interfaces_manage_setting(group_id):
 
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/setting/change/<setting_name>", methods=['POST'])
 def kf_group_interfaces_manage_setting_change(group_id, setting_name):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
-    user = model.getuser_uuid(token.get("user"))
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
+    group = G.get_group(group_id)
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    group = model.group.select().where(model.group.id == group_id).get()
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    manager = selectResult
+    manager = G.isManager(group_id, user_uuid)
 
     if setting_name not in [
         "joinway", "name", "enable_yggdrasil", "enable_invite",
         "enable_public_joinhistory", "enable_public_memberlist"
     ]:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     
     value = data.get("change_value")
 
     if setting_name == "joinway":
         if value not in ["public_join", "public_join_review", "private"]:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         group.joinway = value
     
     
     if setting_name == "name":
         if not re.match(r"[a-zA-Z0-9\u4E00-\u9FA5_-]{4,16}$", value):
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         group.name = value
     
     if setting_name == "enable_yggdrasil":
         if not type(value) == bool:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         group.enable_yggdrasil = value
 
     if setting_name == "enable_invite":
         if not type(value) == bool:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         group.enable_invite = value
 
     if setting_name == "enable_public_joinhistory":
         if not type(value) == bool:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         group.enable_public_joinhistory = value
     
     if setting_name == "enable_public_memberlist":
         if not type(value) == bool:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         group.enable_public_memberlist = value
 
     group.save()
@@ -2044,29 +1129,10 @@ def kf_group_interfaces_manage_setting_change(group_id, setting_name):
 
 @app.route("/api/knowledgefruits/group/interfaces/list", methods=['POST'])
 def kf_group_interfaces_list():
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
-    user = model.getuser_uuid(token.get("user"))
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
-
     Response(json.dumps([(lambda x:{
         "id": x.id,
         "name": x.name,
@@ -2080,16 +1146,10 @@ def kf_group_interfaces_list():
 def kf_group_list_GET(group_id):
     result = model.group.select().where(model.group.id == group_id)
     if not result:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     result = result.get()
     if not result.enable_public_memberlist:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     members = model.member.select().where(
         (model.member.group == result.id) &
         (model.member.is_disabled == False)
@@ -2100,16 +1160,10 @@ def kf_group_list_GET(group_id):
 def kf_group_joinhistory_GET(group_id):
     result = model.group.select().where(model.group.id == group_id)
     if not result:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidRequestData()
     result = result.get()
     if not result.enable_public_joinhistory:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     members = model.member.select().where(
         (model.member.group == result.id) &
         (model.member.is_disabled == False)
@@ -2119,50 +1173,12 @@ def kf_group_joinhistory_GET(group_id):
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/length/", methods=["POST"])
 @app.route("/api/knowledgefruits/group/interfaces/manage/<group_id>/checkjoin/length/<extra>", methods=["POST"])
 def kf_group_interfaces_manager_checkjoin_length(group_id, extra=None):
-    if not request.is_json:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid request data."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    data = request.json
+    data = G.autodata(request)
 
-    accessToken = data.get("accessToken")
-    clientToken = data.get("clientToken")
-    if not accessToken:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    if Token.is_validate_strict(accessToken, clientToken):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    token = Token.gettoken_strict(accessToken, clientToken)
+    token = G.auto_verify(request)
     user_uuid = model.getuser_uuid(token.get("user")).uuid
 
-    if not model.group.select().where(model.group.id == group_id):
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-
-    selectResult = model.member.select().where(
-        (model.member.group == group_id) &
-        (model.member.user == user_uuid) &
-        (model.member.is_disabled == False)
-    )
-    if not selectResult:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    selectResult = selectResult.get()
-    if selectResult.permission not in ['manager', 'super_manager']:
-        return Response(json.dumps({
-            'error' : "ForbiddenOperationException",
-            'errorMessage' : "Invalid token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+    selectResult = G.isManager(group_id, user_uuid)
 
     if not extra:
         length = model.review.select().where(
@@ -2170,10 +1186,7 @@ def kf_group_interfaces_manager_checkjoin_length(group_id, extra=None):
         ).count()
     else:
         if extra not in ["non-enabled", "enabled", "accessed", "non-accessed"]:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid request data."
-            }), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidRequestData()
         length = model.review.select().where(
             (model.review.group == group_id) &
             {
@@ -2187,4 +1200,3 @@ def kf_group_interfaces_manager_checkjoin_length(group_id, extra=None):
     return Response(json.dumps({
         "length": length
     }), mimetype='application/json; charset=utf-8')
-

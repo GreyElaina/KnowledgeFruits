@@ -126,3 +126,4 @@ test/node_modules
 
 coverage
 ./.nyc_output
+data/config.json

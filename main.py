@@ -4,7 +4,7 @@ from datetime import timedelta
 from werkzeug.contrib.fixers import LighttpdCGIRootFix
 
 import model
-from base import app
+from base import app, config
 import fairy
 import customskinapi
 import knowledgeapi

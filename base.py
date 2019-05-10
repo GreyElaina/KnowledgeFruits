@@ -1,6 +1,6 @@
 import json
 import utils
-from flask import Flask
+from flask import Flask, Response
 import cacheout
 import time
 import model
@@ -71,4 +71,12 @@ cache = cacheout.Cache(ttl=0, maxsize=32768)
 Token = TokenCache(cache)
 
 # For someone
-app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
+app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 
+
+# for error
+@app.errorhandler(Exception)
+def errorhandler(error):
+    return Response(json.dumps({
+        "error": error.error,
+        "errorMessage": error.message
+    }), status=403, mimetype='application/json; charset=utf-8')
