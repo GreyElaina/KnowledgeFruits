@@ -7,6 +7,7 @@ import hashlib
 from PIL import Image, ImageDraw
 import utils
 import sv3d
+import Exceptions
 
 SizeConfig = config.UploadSkin.security.size
 
@@ -18,22 +19,17 @@ def fairy_checkinfo():
         size = data.get("size", 0)
         name = data.get("name", 0)
         accessToken = data.get("accessToken", 0)
-        if False in [size, sha256, accessToken, name]:
+        type = data.get("type", 0)
+        if False in [size, sha256, accessToken, name, type]:
             return Response(json.dumps({
                 "error": "ForbiddenOperationException",
                 "errorMessage": "Invalid Data"
             }))
         else:
             if not Token.gettoken_strict(accessToken):
-                return Response(json.dumps({
-                    "error": "ForbiddenOperationException",
-                    "errorMessage": "Invalid Token."
-                }))
+                raise Exceptions.InvalidToken()
             if Token.is_validate_strict(accessToken):
-                return Response(json.dumps({
-                    "error": "ForbiddenOperationException",
-                    "errorMessage": "Invalid Token."
-                }))
+                raise Exceptions.InvalidToken()
             if model.gettexture_photoname(name):
                 return Response(json.dumps({
                     "error": "ForbiddenOperationException",
@@ -48,11 +44,14 @@ def fairy_checkinfo():
                     "error": "PictureDecodeError",
                     "errorMessage": "Invalid Size."
                 }), status=403, mimetype='application/json; charset=utf-8')
+            if type not in ["skin", "cape"]:
+                raise Exceptions.InvalidToken()
             cache.set(".".join(["fairy", "security", "checkinfo", UploadToken]), {
                 "sha256": sha256,
                 "size": size,
                 "accessToken": accessToken,
-                "name": name
+                "name": name,
+                "type": type
             }, ttl=30)
             # size:
             # height
@@ -65,10 +64,7 @@ def fairy_upload():
     header = data[:(32 + 64)].decode()
     Cached = cache.get(".".join(["fairy", "security", "checkinfo", header[:32]]))
     if not Cached:
-        return Response(json.dumps({
-            "error": "ForbiddenOperationException",
-            "errorMessage": "Invalid Token."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        raise Exceptions.InvalidToken()
     imagehex = header[32:]
     if model.gettexture_hash(imagehex):
         return Response(json.dumps({
@@ -84,27 +80,18 @@ def fairy_upload():
     size = Cached.get("size")
     height = size.get("height")
     width = size.get("width")
+
     if len(data) - (32 + 64 + 8) != ((height * width) * 4):
-        return Response(json.dumps({
-            "error": "ForbiddenOperationException",
-            "errorMessage": "Parsing does not provide sufficient amount of bytes"
-        }), status=403, mimetype='application/json; charset=utf-8')
+        return Response(json.dumps({"error": "ForbiddenOperationException","errorMessage": "Parsing does not provide sufficient amount of bytes"}), status=403, mimetype='application/json; charset=utf-8')
     if (len(data) - (32 + 64)) % 4 != 0:
-        return Response(json.dumps({
-            "error": "ForbiddenOperationException",
-            "errorMessage": "No correct encoded image."
-        }), status=403, mimetype='application/json; charset=utf-8')
-    
+        return Response(json.dumps({"error": "ForbiddenOperationException","errorMessage": "No correct encoded image."}), status=403, mimetype='application/json; charset=utf-8')
     if not ((height % 32 == 0) or (height % 17 == 0)) and ((width % 64 == 0) or (width % 22 == 0)):
-        return Response(json.dumps({
-            "error": "ForbiddenOperationException",
-            "errorMessage": "No correct encoded image."
-        }), status=403, mimetype='application/json; charset=utf-8')
+        return Response(json.dumps({"error": "ForbiddenOperationException","errorMessage": "No correct encoded image."}), status=403, mimetype='application/json; charset=utf-8')
         
-    if not (height % 17 != 0):
+    if height % 17 == 0:
         height = int(width / 17) * 32
     
-    if not (width % 22 != 0):
+    if width % 22 == 0:
         width = int(width / 22) * 32
 
     image = Image.new('RGBA', (width, height), (255, 255, 255, 255))
@@ -116,11 +103,7 @@ def fairy_upload():
             draw.point((x, y), fill=(chunks[x][y][1], chunks[x][y][2], chunks[x][y][3], chunks[x][y][0]))
     image.save("".join(["./data/texture/", imagehex, ".png"]), "PNG")
     
-    #开始判断皮肤类型
-    if len(list(set(list(utils.getblock_PIL(image).getdata())))) == 1:
-        skintype = "SKIN"
-    else:
-        skintype = "CAPE"
+    skintype = Cached.get("type")
     
     if skintype == "SKIN" and height % 64 == 0:
         skinmodel = ["STEVE", "ALEX"][sv3d.isSilmSkin(image)]
