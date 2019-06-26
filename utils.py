@@ -132,7 +132,7 @@ def getblock(skin, block=(1, 1)):
     return photo
 
 def getblock_PIL(skin, block=(1, 1)):
-    return skin.crop((block[0]*8, block[1]*8, (block[0]+1)*8, (block[1]+1)*8))
+    return skin.crop((block[0]*(skin.size[0]/8), block[1]*(skin.size[1]/8), (block[0]+1)*(skin.size[0]/8), (block[1]+1)*(skin.size[1]/8)))
 
 def gethead_skin(skin):
     rawhead = getblock(skin)
@@ -163,15 +163,3 @@ def ifnone(i):
 def isallnone(i):
     return True not in [ifnone(ii) for ii in i]
 
-if __name__ == "__main__":
-    #print(PngBinHash("./data/texture/212d8dfa3695daba43b406851c00105a2669d9681a44aa1e109a88ddf324f576.png"))
-    #print(r"0x00".encode("utf-8"))8e364d6d4886a76623062feed4690c67a23a66c5d84f126bd895b903ea26dbee.png
-    #print(PngBinHash("./data/texture/texture-hash-test.png"))
-    #import time
-    #time_start = time.time()
-    #with open("./faq.png", "wb") as f:
-    #    f.write(gethead_skin("./data/texture/81c26f889ba6ed12f97efbac639802812c687b4ffcc88ea75d6a8d077328b3bf.png"))
-    #time_end = time.time()
-    #print('totally cost',time_end-time_start)
-    #print(PngBinHash("./data/texture/74349566b05e0d4db0705fe511851e119341538575648c369d9dd6fcf8c8623e.png"))
-    print(genkeys())

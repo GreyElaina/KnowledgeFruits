@@ -1,5 +1,5 @@
 from base import config, cache, app, Token
-from flask import request, Response, redirect, url_for
+from flask import request, Response, redirect, url_for, send_file
 import json
 import uuid
 import model
@@ -8,14 +8,7 @@ import os
 
 @app.route("/texture/<image>", methods=['GET'])
 def imageview(image):
-    try:
-        with open(os.getcwd() + "/data/texture/" + image + '.png', "rb") as f:
-            image = f.read()
-    except FileNotFoundError:
-        if config.GetSkin.AutoMojang:
-            pass
-        return Response(status=404)
-    return Response(image, mimetype='image/png')
+    return Response(open(os.getcwd() + "/data/texture/" + image + '.png', "rb"), mimetype='image/png')
 
 @app.route("/texture/<image>/head", methods=['GET'])
 def imageview_head(image):
@@ -37,7 +30,3 @@ def imageview_head(image):
     except FileNotFoundError:
         return Response(status=404)
     return Response(image, mimetype='image/png')
-
-@app.route("/texture/mojang/<uuid>")
-async def texture_mojang(uuid):
-    return Response(await json.dumps({'key': 'value'}), mimetype='application/json; charset=utf-8')

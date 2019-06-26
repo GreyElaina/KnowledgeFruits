@@ -6,6 +6,7 @@ import model
 import hashlib
 from PIL import Image, ImageDraw
 import utils
+import sv3d
 
 SizeConfig = config.UploadSkin.security.size
 
@@ -121,12 +122,8 @@ def fairy_upload():
     else:
         skintype = "CAPE"
     
-    if skintype == "SKIN":
-        if height % 64 == 0:
-            if len(list(set(list(image.crop((width - 2, height - 12, width, height)).getdata())))) == 1 and list(set(list(image.crop((width - 2, height - 12, width, height)).getdata()))) == (255, 255, 255 ,255):
-                skinmodel = "ALEX"
-            else:
-                skinmodel = "STEVE"
+    if skintype == "SKIN" and height % 64 == 0:
+        skinmodel = ["STEVE", "ALEX"][sv3d.isSilmSkin(image)]
     texture = model.textures(
         userid=Token.gettoken_strict(Cached.get("accessToken")).get("user"),
         photoname=Cached.get("name"),

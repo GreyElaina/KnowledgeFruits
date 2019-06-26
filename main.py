@@ -11,6 +11,7 @@ import knowledgeapi
 import yggdrasil
 import texture
 import YggdrasilGroup
+from time import sleep
 
 if __name__ == '__main__':
     model.db['log'].create_tables([model.log_kf, model.log_yggdrasil])
@@ -22,12 +23,17 @@ if __name__ == '__main__':
     app.wsgi_app = LighttpdCGIRootFix(app.wsgi_app)
     from paste.translogger import TransLogger
     import waitress
-    waitress.serve(
-        TransLogger(app,
-            setup_console_handler=True,
-            format="[%(time)s][%(REQUEST_METHOD)s][%(status)s] \"%(REQUEST_URI)s\"",
-        ),
-        host='0.0.0.0',
-        port=5001
-    )
+    try:
+        waitress.serve(
+            TransLogger(app,
+                setup_console_handler=True,
+                format="[%(time)s][%(REQUEST_METHOD)s][%(status)s] \"%(REQUEST_URI)s\"",
+            ),
+            host='0.0.0.0',
+            port=5001
+        )
+    except KeyboardInterrupt:
+        print("KnowledgeFruits will exit after 5 seconds.")
+        sleep(5)
+        exit()
     #app.run(port=5001, debug=True)

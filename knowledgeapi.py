@@ -15,8 +15,6 @@ import random
 import Exceptions
 import group as G
 
-@app.route("/api/knowledgefruits/serverinfo/knowledgefruits")
-@app.route("/api/knowledgefruits/serverinfo")
 @app.route("/api/knowledgefruits/")
 def serverinfo():
     return Response(json.dumps({
@@ -44,11 +42,7 @@ def kf_randomkey_signin():
         authid = data.get("authid")
         user_result = model.getuser(data['username'])
         if not user_result:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidCredentials()
         salt = user_result.passwordsalt
         if user_result:
             IReturn = {
@@ -77,11 +71,7 @@ def kf_randomkey_signout():
         authid = data.get("authid")
         user_result = model.getuser(data['username'])
         if not user_result:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid credentials. Invalid username or password."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidCredentials()
         salt = user_result.passwordsalt
         if user_result:
             IReturn = {
@@ -131,11 +121,7 @@ def kf_login_verify():
                         return Response(status=204)
                 else:
                     cache.delete(data['authId'])
-                    error = {
-                        'error' : "ForbiddenOperationException",
-                        'errorMessage' : "Invalid credentials. Invalid username or password."
-                    }
-                    return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                    raise Exceptions.InvalidCredentials()
             else:
                 cache.delete(data['authId'])
                 return Response(status=403)
@@ -186,15 +172,9 @@ def kf_user_changepasswd(username):
                 model.token.delete().where(model.token.email == user.email).execute()
                 return Response(status=204)
             else:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    "errorMessage" : "Invalid token."
-                }), status=403, mimetype="application/json; charset=utf-8")
+                raise Exceptions.InvalidToken()
         else:
-            return Response(json.dumps({
-                'error' : "ForbiddenOperationException",
-                "errorMessage" : "Invalid token."
-            }), status=403, mimetype="application/json; charset=utf-8")
+            raise Exceptions.InvalidToken()
 
 @app.route("/api/knowledgefruits/search/textures/<path:args>")
 def kf_texturesinfo(args):
@@ -262,18 +242,10 @@ def kf_authenticate_simple_refrush():
         else:
             OldToken = Token.gettoken_strict(AccessToken)
         if not OldToken:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         
         if int(time.time()) >= OldToken.get("createTime") + (config.TokenTime.RefrushTime * config.TokenTime.TimeRange):
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         NewAccessToken = str(uuid.uuid4()).replace('-', '')
         cache.set(".".join(["token", NewAccessToken]), {
             "clientToken": OldToken.get('clientToken'),
@@ -294,18 +266,10 @@ def kf_validate():
         ClientToken = data.get("clientToken")
         result = Token.gettoken_strict(AccessToken, ClientToken)
         if not result:
-            error = {
-                'error' : "ForbiddenOperationException",
-                'errorMessage' : "Invalid token."
-            }
-            return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+            raise Exceptions.InvalidToken()
         else:
             if Token.is_validate_strict(AccessToken, ClientToken):
-                error = {
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }
-                return Response(json.dumps(error), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
             else:
                 return Response(status=204)
 
@@ -452,10 +416,7 @@ def kf_profile_cape_change(profileid):
 
         if texture.isPrivate:
             if texture.userid != user.uuid:
-                return Response(json.dumps({
-                    'error' : "ForbiddenOperationException",
-                    'errorMessage' : "Invalid token."
-                }), status=403, mimetype='application/json; charset=utf-8')
+                raise Exceptions.InvalidToken()
 
         if texture.type != "cape":
             raise Exceptions.InvalidToken()
@@ -595,14 +556,14 @@ def kf_group_interfaces_signout(group_id):
                     ).save()
                 model.member.delete().where(model.member.group == group_id).execute()
     else:
+        known.is_disabled = True
+        known.move_times += 1
+        known.save()
         manager_result = model.member.select().where(
             (model.member.is_disabled == False) &
             ((model.member.permission == "manager") | (model.member.permission == "super_manager")) &
             (model.member.group == group_id)
         )
-        known.is_disabled = True
-        known.move_times += 1
-        known.save()
         for i in manager_result:
             model.message(
                 to=i.user,
@@ -1097,8 +1058,7 @@ def kf_group_interfaces_manage_setting_change(group_id, setting_name):
         if value not in ["public_join", "public_join_review", "private"]:
             raise Exceptions.InvalidRequestData()
         group.joinway = value
-    
-    
+
     if setting_name == "name":
         if not re.match(r"[a-zA-Z0-9\u4E00-\u9FA5_-]{4,16}$", value):
             raise Exceptions.InvalidRequestData()

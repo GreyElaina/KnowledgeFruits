@@ -50,9 +50,8 @@ def authenticate():
                 AvailableProfiles = [
                     model.format_profile(i, unsigned=True) for i in model.profile.select().where(model.profile.createby==user.uuid)
                 ]
-            except Exception as e:
-                if "profileDoesNotExist" == e.__class__.__name__:
-                    pass
+            except model.profile.DoesNotExist:
+                pass
 
             Profileresult = model.getprofile_createby(user.uuid)
             if len(Profileresult) == 1:
@@ -114,15 +113,6 @@ def refresh():
         else:
             OldToken = Token.gettoken_strict(AccessToken)
         if not OldToken:
-            model.log_yggdrasil(
-                operational="authserver.refrush",
-                otherargs=json.dumps({
-                    "clientToken": data.get("clientToken")
-                }),
-                IP=request.remote_addr,
-                time=datetime.datetime.now(),
-                successful=False
-            ).save()
             raise Exceptions.InvalidToken()
         
         if int(time.time()) >= OldToken.get("createTime") + (config.TokenTime.RefrushTime * config.TokenTime.TimeRange):
@@ -147,7 +137,7 @@ def refresh():
             PostProfile = data['selectedProfile']
             needuser = model.getprofile_id_name(PostProfile['id'], PostProfile['name'])
             if not needuser: # 验证客户端提供的角色信息
-                raise Exceptions.InvalidToken()
+                raise Exceptions.IllegalArgumentException()
                 # 角色不存在.
             else:
                 needuser = needuser.get()
