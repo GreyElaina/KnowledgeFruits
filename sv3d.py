@@ -1,3 +1,7 @@
+"""
+Inspired by skinview3d(https://github.com/bs-community/skinview3d)
+"""
+
 def listget(li, index):
     try:
         return li[index]

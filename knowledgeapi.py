@@ -1,3 +1,4 @@
+
 from base import config, cache_secureauth, app, Token, raw_config, cache_token
 from flask import request, Response
 import json
@@ -38,10 +39,12 @@ def serverinfo():
 def kf_randomkey_signin():
     if request.is_json:
         data = request.json
+        print(data)
         Randomkey = password.CreateSalt(length=8)
         authid = data.get("authid")
         user_result = model.getuser(data['username'])
         if not user_result:
+            print("why!!!!")
             raise Exceptions.InvalidCredentials()
         salt = user_result.passwordsalt
         if user_result:
@@ -59,6 +62,7 @@ def kf_randomkey_signin():
                 "authId" : authid,
                 "inorderto": "signin"
             }, ttl=30)
+            print("分".join([salt, authid, Randomkey]))
             return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
         else:
             return Response(status=403)
@@ -88,6 +92,7 @@ def kf_randomkey_signout():
                 "authId" : authid,
                 "inorderto": "signout"
             }, ttl=30)
+            print(RandomKey, salt, authid)
             return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
         else:
             return Response(status=403)
@@ -103,15 +108,36 @@ def kf_login_verify():
             user_result = model.getuser(Data['username'])
             if user_result:
                 AuthRequest = password.crypt(user_result.password, Data['HashKey'])
+                print(AuthRequest)
                 if AuthRequest == data['Password']:
                     if Data.get("inorderto") == "signin":
-                        Token = model.token(accessToken=str(uuid.uuid4()).replace("-", ""), clientToken=str(uuid.uuid4()).replace("-", ""), bind=user_result.selected, email=user_result.email)
-                        Token.save() # 颁发Token
+                        notDoubleProfile = False
+                        Profileresult = model.getprofile_createby(user_result.uuid)
+                        if len(Profileresult) == 1:
+                            notDoubleProfile = True
+                            SelectedProfile = model.format_profile(Profileresult.get())
+
+                        AccessToken = str(uuid.uuid4()).replace("-", "")
+                        ClientToken = str(uuid.uuid4()).replace("-", "")
+
+                        cache_token.set(AccessToken, {
+                            "clientToken": ClientToken,
+                            "bind": Profileresult.get().uuid if notDoubleProfile else None,
+                            "user": user_result.uuid,
+                            "group": "global",
+                            "createTime": int(time.time())
+                        }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
                         IReturn = {
-                            "accessToken" : Token.accessToken,
-                            "clientToken" : Token.clientToken
+                            "accessToken" : AccessToken,
+                            "clientToken" : ClientToken,
                         }
                         cache_secureauth.delete(data['authId'])
+                        if data.get("requestUser"):
+                            IReturn['metadata'] = {
+                                "user": {
+                                    "userId": user_result.uuid
+                                }
+                            }
                         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
                     if Data.get("inorderto") == "signout":
                         result = Token.getalltoken(user_result)

@@ -34,7 +34,7 @@
 export default {
     data(){
         return {
-            rotated: true
+            rotated: trued
         }
     },
     methods: {

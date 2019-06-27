@@ -9,6 +9,7 @@
     "webpack-cli": "^3.3.5"
   },
   "dependencies": {
-    "element-ui": "^2.10.0"
+    "element-ui": "^2.10.0",
+    "vue-cookies": "^1.5.13"
   }
 }

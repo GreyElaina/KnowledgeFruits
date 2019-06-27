@@ -12,6 +12,7 @@ import yggdrasil
 import texture
 import YggdrasilGroup
 from time import sleep
+from flask import render_template
 
 if __name__ == '__main__':
     model.db['log'].create_tables([model.log_kf, model.log_yggdrasil])

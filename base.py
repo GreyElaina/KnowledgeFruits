@@ -66,8 +66,7 @@ class TokenCache():
 
 config = utils.Dict2Object(__import__("json").loads(open("./data/config.json").read()))
 raw_config = json.loads(open("./data/config.json").read())
-app = Flask("main")
-
+app = Flask("main", template_folder="./manager/dist", static_folder="./manager/dist")
 
 cache_token = cacheout.Cache(ttl=0, maxsize=8192)
 cache_limit = cacheout.Cache(ttl=0, maxsize=22)
@@ -80,8 +79,11 @@ Token = TokenCache(cache_token)
 # For someone
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 
+# for the fuck CORS
+from flask_cors import CORS
+CORS(app, resources={r"/api/*": {"origins": "*"}})
+
 # for error
-@app.errorhandler(Exception)
 def errorhandler(error):
     if error.__class__ in Exceptions.__dict__.values():
         return Response(json.dumps({
@@ -90,6 +92,8 @@ def errorhandler(error):
         }), status=error.code, mimetype='application/json; charset=utf-8')
     else:
         raise error
+
+[app.errorhandler(i)(errorhandler) for i in Exceptions.ErrorList]
 """
 @app.errorhandler(werkzeug.exceptions.HTTPException)
 def errorhandler_natura(error):
