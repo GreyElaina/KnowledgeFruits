@@ -1,4 +1,4 @@
-from base import config, cache, app, Token
+from base import config, app, Token
 from flask import request, Response
 import json
 import uuid

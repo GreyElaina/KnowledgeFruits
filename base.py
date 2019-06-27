@@ -11,7 +11,7 @@ class TokenCache():
         self.CacheObject = CacheObject
 
     def _format(self, string):
-        return ".".join(["token", string])
+        return string
 
     def getuser_byaccessToken(self, accessToken):
         result = self.CacheObject.get(self._format(accessToken))
@@ -22,8 +22,6 @@ class TokenCache():
     def getalltoken(self, User):
         result = []
         for i in self.CacheObject:
-            if not i[:5] == "token":
-                continue
             if self.CacheObject.get(i).get("user") == User.uuid:
                 result.append(i)
         return result
@@ -69,9 +67,16 @@ class TokenCache():
 config = utils.Dict2Object(__import__("json").loads(open("./data/config.json").read()))
 raw_config = json.loads(open("./data/config.json").read())
 app = Flask("main")
-cache = cacheout.Cache(ttl=0, maxsize=32768)
-Token = TokenCache(cache)
 
+
+cache_token = cacheout.Cache(ttl=0, maxsize=8192)
+cache_limit = cacheout.Cache(ttl=0, maxsize=22)
+cache_joinserver = cacheout.Cache(ttl=0, maxsize=128)
+cache_secureauth = cacheout.Cache(ttl=0, maxsize=8192)
+cache_uploadtoken = cacheout.Cache(ttl=0, maxsize=256)
+cache_head = cacheout.Cache(ttl=0, maxsize=32768)
+
+Token = TokenCache(cache_token)
 # For someone
 app.config['MAX_CONTENT_LENGTH'] = 2 * 1024 * 1024
 
@@ -85,7 +90,7 @@ def errorhandler(error):
         }), status=error.code, mimetype='application/json; charset=utf-8')
     else:
         raise error
-
+"""
 @app.errorhandler(werkzeug.exceptions.HTTPException)
 def errorhandler_natura(error):
-    return Response(error.description, status=error.code)
+    return Response(error.description, status=error.code)"""

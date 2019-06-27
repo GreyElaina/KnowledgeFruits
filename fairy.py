@@ -1,4 +1,4 @@
-from base import config, cache, app, Token
+from base import config, cache_uploadtoken, app, Token
 from flask import request, Response
 import json
 import uuid
@@ -46,7 +46,7 @@ def fairy_checkinfo():
                 }), status=403, mimetype='application/json; charset=utf-8')
             if type not in ["skin", "cape"]:
                 raise Exceptions.InvalidToken()
-            cache.set(".".join(["fairy", "security", "checkinfo", UploadToken]), {
+            cache_uploadtoken.set(".".join(["fairy", "security", "checkinfo", UploadToken]), {
                 "sha256": sha256,
                 "size": size,
                 "accessToken": accessToken,
@@ -62,7 +62,7 @@ def fairy_checkinfo():
 def fairy_upload():
     data = request.data
     header = data[:(32 + 64)].decode()
-    Cached = cache.get(".".join(["fairy", "security", "checkinfo", header[:32]]))
+    Cached = cache_uploadtoken.get(".".join(["fairy", "security", "checkinfo", header[:32]]))
     if not Cached:
         raise Exceptions.InvalidToken()
     imagehex = header[32:]

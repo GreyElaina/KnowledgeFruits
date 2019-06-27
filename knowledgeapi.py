@@ -1,4 +1,4 @@
-from base import config, cache, app, Token, raw_config
+from base import config, cache_secureauth, app, Token, raw_config, cache_token
 from flask import request, Response
 import json
 import uuid
@@ -51,7 +51,7 @@ def kf_randomkey_signin():
                 "username" : user_result.email,
                 "salt" : salt
             }
-            cache.set(authid, {
+            cache_secureauth.set(authid, {
                 "HashKey" : Randomkey,
                 "username" : user_result.email,
                 "salt" : salt,
@@ -80,7 +80,7 @@ def kf_randomkey_signout():
                 "username" : user_result.email,
                 "salt" : salt
             }
-            cache.set(authid, {
+            cache_secureauth.set(authid, {
                 "HashKey" : Randomkey,
                 "username" : user_result.email,
                 "salt" : salt,
@@ -96,7 +96,7 @@ def kf_randomkey_signout():
 def kf_login_verify():
     if request.is_json:
         data = request.json
-        Data = cache.get(data.get("authId"))
+        Data = cache_secureauth.get(data.get("authId"))
         if not Data:
             return Response(status=403)
         else:
@@ -111,19 +111,19 @@ def kf_login_verify():
                             "accessToken" : Token.accessToken,
                             "clientToken" : Token.clientToken
                         }
-                        cache.delete(data['authId'])
+                        cache_secureauth.delete(data['authId'])
                         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
                     if Data.get("inorderto") == "signout":
                         result = Token.getalltoken(user_result)
                         if result:
                             for i in result:
-                                cache.delete(i)
+                                cache_secureauth.delete(i)
                         return Response(status=204)
                 else:
-                    cache.delete(data['authId'])
+                    cache_secureauth.delete(data['authId'])
                     raise Exceptions.InvalidCredentials()
             else:
-                cache.delete(data['authId'])
+                cache_secureauth.delete(data['authId'])
                 return Response(status=403)
 
 @app.route("/api/knowledgefruits/authenticate/password/test", methods=['POST'])
@@ -184,7 +184,7 @@ def kf_texturesinfo(args):
             "errorMessage": "参数格式错误"
         }), mimetype='application/json; charset=utf-8', status=403)
     Args = {args.split("/")[i] : args.split("/")[i + 1] for i in range(len(args.split("/")))[::2]}
-    Args.pop("isPrivate", None)
+    Args.pop("isPrivate")
     content = [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][0]
     for i in [model.textures.__dict__[i].field == Args[i] for i in Args.keys()][1:]:
         content = content & i
@@ -247,13 +247,13 @@ def kf_authenticate_simple_refrush():
         if int(time.time()) >= OldToken.get("createTime") + (config.TokenTime.RefrushTime * config.TokenTime.TimeRange):
             raise Exceptions.InvalidToken()
         NewAccessToken = str(uuid.uuid4()).replace('-', '')
-        cache.set(".".join(["token", NewAccessToken]), {
+        cache_token.set(".".join(["token", NewAccessToken]), {
             "clientToken": OldToken.get('clientToken'),
             "bind": "",
             "user": OldToken.get("user"),
             "createTime": int(time.time())
         }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
-        cache.delete(".".join(["token", AccessToken]))
+        cache_token.delete(".".join(["token", AccessToken]))
         IReturn['accessToken'] = NewAccessToken
         IReturn['clientToken'] = OldToken.get('clientToken')
         return Response(json.dumps(IReturn), mimetype='application/json; charset=utf-8')
@@ -282,7 +282,7 @@ def kf_invalidate():
 
         result = Token.gettoken(AccessToken, ClientToken)
         if result:
-            cache.delete(".".join(['token', AccessToken]))
+            cache_token.delete(".".join(['token', AccessToken]))
         else:
             if ClientToken:
                 raise Exceptions.InvalidToken()

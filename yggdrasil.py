@@ -1,4 +1,4 @@
-from base import config, cache, app, Token
+from base import config, cache_token, app, Token, cache_limit, cache_joinserver
 from flask import request, Response
 import json
 import uuid
@@ -33,8 +33,8 @@ def authenticate():
                 'error' : "ForbiddenOperationException",
                 'errorMessage' : "You have been banned by the administrator, please contact the administrator for help"
             }), status=403, mimetype='application/json; charset=utf-8')'''
-        if not cache.get(".".join(['lock', user.email])):
-            cache.set(".".join(['lock', user.email]), "LOCKED", ttl=config.AuthLimit)
+        if not cache_limit.get(".".join(['lock', user.email])):
+            cache_limit.set(".".join(['lock', user.email]), "LOCKED", ttl=config.AuthLimit)
         else:
             raise Exceptions.InvalidCredentials()
 
@@ -58,7 +58,7 @@ def authenticate():
                 notDoubleProfile = True
                 SelectedProfile = model.format_profile(Profileresult.get())
 
-            cache.set(".".join(["token", AccessToken]), {
+            cache_token.set(AccessToken, {
                 "clientToken": ClientToken,
                 "bind": Profileresult.get().uuid if notDoubleProfile else None,
                 "user": user.uuid,
@@ -179,7 +179,7 @@ def refresh():
                 Can = True
 
         NewAccessToken = str(uuid.uuid4()).replace('-', '')
-        cache.set(".".join(["token", NewAccessToken]), {
+        cache_token.set(NewAccessToken, {
             "clientToken": OldToken.get('clientToken'),
             "bind": TokenSelected,
             "user": OldToken.get("user"),
@@ -187,7 +187,7 @@ def refresh():
             "createTime": int(time.time())
         }, ttl=config.TokenTime.RefrushTime * config.TokenTime.TimeRange)
 
-        cache.delete(".".join(["token", AccessToken]))
+        cache_token.delete(AccessToken)
         IReturn['accessToken'] = NewAccessToken
         IReturn['clientToken'] = OldToken.get('clientToken')
         if TokenProfile and not Can:
@@ -272,7 +272,7 @@ def invalidate():
                 IP=request.remote_addr,
                 time=datetime.datetime.now()
             ).save()
-            cache.delete(".".join(['token', AccessToken]))
+            cache_token.delete(AccessToken)
         else:
             model.log_yggdrasil(
                 operational="authserver.invalidate",
@@ -315,15 +315,15 @@ def signout():
                     'error' : "ForbiddenOperationException",
                     'errorMessage' : "Invalid credentials. Invalid username or password."
                 }), status=403, mimetype='application/json; charset=utf-8')'''
-            if not cache.get(".".join(['lock', result.email])):
-                cache.set(".".join(['lock', result.email]), "LOCKED", ttl=config.AuthLimit)
+            if not cache_limit.get(".".join(['lock', result.email])):
+                cache_limit.set(".".join(['lock', result.email]), "LOCKED", ttl=config.AuthLimit)
             else:
                 raise Exceptions.InvalidCredentials()
             if password.crypt(passwd, salt=result.passwordsalt) == result.password:
                 Token_result = Token.getalltoken(result)
                 if Token_result:
                     for i in Token_result:
-                        cache.delete(i)
+                        cache_token.delete(i)
                 model.log_yggdrasil(
                     operational="authserver.signout",
                     user=result.uuid,
@@ -370,7 +370,7 @@ def joinserver():
             player = model.getprofile(result.get().name).get()
             playeruuid = player.profile_id.replace("-", "")
             if data['selectedProfile'] == playeruuid:
-                cache.set(data['serverId'], {
+                cache_joinserver.set(data['serverId'], {
                     "accessToken": AccessToken,
                     "selectedProfile": data['selectedProfile'],
                     "remoteIP": request.remote_addr
@@ -407,7 +407,7 @@ def PlayerHasJoined():
     PlayerName = args['username']
     RemoteIP = args['ip'] if 'ip' in args else None
     Successful = False
-    Data = cache.get(ServerID)
+    Data = cache_joinserver.get(ServerID)
     if not Data:
         model.log_yggdrasil(
             operational="sessionserver.session.minecraft.hasJoined",
