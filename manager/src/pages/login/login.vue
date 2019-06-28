@@ -37,9 +37,9 @@
 </style>
 
 <script>
-import RotateButtomComponent from "./composents/rotatebuttom.vue";
+import RotateButtomComponent from "../../composents/rotatebuttom.vue";
 import axios from "axios";
-import config from "./config.js";
+import config from "../../config.js";
 import { sha256 } from "js-sha256";
 
 export default {

@@ -130,3 +130,5 @@ data/config.json
 
 manager/dist
 manager/node_modules
+
+data/config.hcl

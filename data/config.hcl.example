@@ -1,0 +1,111 @@
+const {
+    // Yggdrasil's endpoints
+    base = "/api/yggdrasil"
+}
+
+// For connecting to the database
+database {
+    type = "SqliteDatabase"
+    connect_info {
+        global_db = "./data/global.db"
+    }
+    globalinfo {}
+    other {
+        global {}
+        cache {}
+    }
+}
+
+AuthLimit = 1
+ServerIDOutTime = 30
+
+# 60 for a minutes.
+# also, you can set it to 3600 for a day.
+# 3 for the token with the status of "Need to Refrush to use"
+# 5 for the token with the status of "Remove Time".
+TokenTime {
+    RefrushTime = 5
+    EnableTime = 3
+    TimeRange = 60
+}
+
+# Knowledgefruits based waitress
+# so you must follow the rules
+# host: where does the server run
+# port: 端口
+AdditionalParameters {
+    bind {
+        host = "0.0.0.0"
+        port = 5001
+    }
+    loglevel = "debug"
+}
+
+# 材质存放位置
+TexturePath = "./data/texture"
+
+# 实际访问URL
+HostUrl = "http://127.0.0.1:5001"
+
+# Yggdrasil调用角色搜索API时的最大限额
+ProfileSearch {
+    MaxAmount = 8
+}
+
+YggdrasilIndexData {
+    serverName = "KnowledgeFruits - Minecrart Yggdrasil"
+    implementationName = "knowledge_fruits"
+    implementationVersion = "v0.0.1"
+}
+
+# 密匙放置位置
+KeyPath {
+    Private = "./data/rsa.pem"
+    Public = "./data/public.pem"
+}
+
+reMatch {
+    PlayerName {
+        content = "[a-zA-Z0-9_-]"
+        length {
+            min = 4
+            max = 16
+        }
+        isSigner = true
+    }
+    UserPassword {
+        content = "^(?![0-9]+$)(?![a-zA-Z]+$)[0-9A-Za-z]"
+        length {
+            min = 6
+            max = 21
+        }
+        isSigner = true
+    }
+    UserEmail {
+        content = "^([a-zA-Z0-9]+[_|\\_|\\.]?)*[a-zA-Z0-9]+@([a-zA-Z0-9]+[_|\\_|\\.]?)*[a-zA-Z0-9]+\\.[a-zA-Z]"
+        length {
+            min = 2
+            max = 3
+        }
+        isSigner = true
+    }
+}
+
+# 使用Fairy Uploader时, 材质的最大宽高
+UploadSkin {
+    security {
+        size {
+            width = [0, 128]
+            height = [0, 128]
+        }
+    }
+}
+
+# 邮箱注册的相关信息
+# 由于我们使用了zmail作为我们的邮件发送支持, 你只需要填写非常少的信息
+# 请注意, 部分邮箱服务提供商使用特殊的授权码作为使用POP3, SMTP协议时使用的密码, 且通常默认不开启SMTP, POP3协议支持
+# 如果你使用QQ邮箱, 请注意, QQ邮箱属于上述情况. 请于其设置处开启并设置相关选项以防止你遇到不必要的麻烦.
+email {
+    username = "youremail@example.com"
+    password = "yourpassword"
+}

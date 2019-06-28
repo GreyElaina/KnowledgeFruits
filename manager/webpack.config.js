@@ -4,14 +4,14 @@ const VueLoaderPlugin = require('vue-loader/lib/plugin')
 
 module.exports = {
     entry: {
-        app: './src/index.js',
+        login: './src/pages/login/index.js',
+        register: "./src/pages/register/index.js"
     },
     plugins: [
         new webpack.LoaderOptionsPlugin({
             options: {
                 alias: {
                     "@": path.resolve("src"),
-                    "@auth": path.resolve("src/authenticate"),
                     "@composents": path.resolve("composents")
                 },
             }

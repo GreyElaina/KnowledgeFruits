@@ -10,12 +10,11 @@ from datetime import datetime
 import peewee
 import rsa
 
-
 import utils
 import password
 from database import db
+from base import config
 
-config = utils.Dict2Object(__import__("json").loads(open("./data/config.json").read()))
 class user(peewee.Model):
     uuid = peewee.CharField(default=(lambda: str(uuid.uuid4()).replace("-", ""))(), index=True)
     username = peewee.CharField(null=True)

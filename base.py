@@ -1,3 +1,4 @@
+import hcl
 import json
 import utils
 from flask import Flask, Response
@@ -64,8 +65,8 @@ class TokenCache():
             return False
         return result
 
-config = utils.Dict2Object(__import__("json").loads(open("./data/config.json").read()))
-raw_config = json.loads(open("./data/config.json").read())
+config = utils.Dict2Object(__import__("hcl").loads(open("./data/config.hcl", encoding='utf8').read()))
+raw_config = hcl.loads(open("./data/config.hcl", encoding='utf8').read())
 app = Flask("main", template_folder="./manager/dist", static_folder="./manager/dist")
 
 cache_token = cacheout.Cache(ttl=0, maxsize=8192)

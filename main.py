@@ -11,6 +11,7 @@ import knowledgeapi
 import yggdrasil
 import texture
 import YggdrasilGroup
+import emailverify
 from time import sleep
 from flask import render_template
 
@@ -30,8 +31,8 @@ if __name__ == '__main__':
                 setup_console_handler=True,
                 format="[%(time)s][%(REQUEST_METHOD)s][%(status)s] \"%(REQUEST_URI)s\"",
             ),
-            host='0.0.0.0',
-            port=5001
+            host=config.AdditionalParameters.bind.host,
+            port=config.AdditionalParameters.bind.port
         )
     except KeyboardInterrupt:
         print("KnowledgeFruits will exit after 5 seconds.")

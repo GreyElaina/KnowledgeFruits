@@ -18,4 +18,4 @@ class IllegalArgumentException(Exception):
     message = "Access token already has a profile assigned."
     code = 400
     
-ErrorList = [InvalidCredentials, InvalidRequestData, InvalidToken]
+ErrorList = [InvalidCredentials, InvalidRequestData, InvalidToken, IllegalArgumentException]

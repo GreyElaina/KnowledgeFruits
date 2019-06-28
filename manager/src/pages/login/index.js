@@ -1,7 +1,7 @@
 import Vue from 'vue'
 import ElementUI from 'element-ui';
 import 'element-ui/lib/theme-chalk/index.css';
-import App from "./app.vue"
+import Login from "./login.vue"
 import VueCookies from "vue-cookies"
 
 Vue.use(ElementUI)
@@ -12,5 +12,5 @@ var app = new Vue({
     data(){
         return {}
     },
-    render: h => h(App)
+    render: h => h(Login)
 })

@@ -1,5 +1,6 @@
 {
     "python.linting.enabled": true,
     "python.linting.pylintPath": "python3 -m pylint",
-    "python.pythonPath": "G:\\Tools\\Python36\\python3.exe"
+    "python.pythonPath": "C:\\Users\\TempUser\\.virtualenvs\\Yggdrasil-ti7Hy37S\\Scripts\\python.exe",
+    "python.linting.pylintEnabled": true
 }
