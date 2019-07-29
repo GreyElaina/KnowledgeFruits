@@ -1,0 +1,7 @@
+{
+    "alias": {
+        "@handler": "${projectDir}/src/handler",
+        "@path": "${projectDir}/src/handler/path",
+        "@": "${projectDir}/src"
+    }
+}

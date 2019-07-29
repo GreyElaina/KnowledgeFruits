@@ -1,0 +1,24 @@
+[
+    {
+        "uuid": "1de6727efc2a4364bd8db04bffe6eea5",
+        "name": "character1",
+        "skin": "65c15ced19134c4582fae4792a2fdd6c",
+        "cape": "7e534ac7d46e4a8ab38e49eebc08f1bc",
+        "createTime": 1556858819,
+        "owner": "68f05add0ede417f975b5e7c1e66c510"
+    },
+    {
+        "uuid": "07ce6cfb44e2433ea3d927ee11e0bcac",
+        "name": "character2",
+        "skin": "fa609f3ab7df43e09f1cc4c8a73d4517",
+        "createTime": 1556858819,
+        "owner": "62ded08c5cac4993a5fa8bc3d3425376"
+    },
+    {
+        "uuid": "0ff8df779b35411da8835e4584c8b270",
+        "name": "character3",
+        "cape": "e346a10cecdf4f37b61719b91a2e52b3",
+        "createTime": 1556858819,
+        "owner": "62ded08c5cac4993a5fa8bc3d3425376"
+    }
+]

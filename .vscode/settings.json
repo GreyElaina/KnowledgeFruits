@@ -1,6 +1,12 @@
 {
     "python.linting.enabled": true,
     "python.linting.pylintPath": "python3 -m pylint",
-    "python.pythonPath": "C:\\Users\\TempUser\\.virtualenvs\\Yggdrasil-ti7Hy37S\\Scripts\\python.exe",
-    "python.linting.pylintEnabled": true
+    "python.pythonPath": "G:\\Tools\\Python36\\python.exe",
+    "python.linting.pylintEnabled": false,
+    "python.linting.flake8Enabled": true,
+    "python.linting.flake8Args":[
+        "--max-line-length=1000",
+        "--extend-ignore=F811,E701,F841,W293,E306,E261,E231,E203,E117,E302,E225,E228,W291,E305,W191,W292,W391,E402,F401,E301"
+    ],
+    "python.jediEnabled": true
 }
