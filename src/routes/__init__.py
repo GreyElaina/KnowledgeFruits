@@ -57,7 +57,7 @@ class Routes:
                             "Handler": Handler
                         }))
                     else:
-                        traceback.print_exc()
+                        raise e
                 else:
                     ReturnResponse.render(self)
 

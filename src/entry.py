@@ -9,29 +9,25 @@ import peewee_async
 from entrancebar import entrance_file, path_render
 
 from routes import Route
-from config import ConfigObject
+from config import ConfigObject, ModuleConfig
 import sys
 from common.FormsDict import FormsDict
 
+Modules = ModuleConfig()
+
 ImportedModules = {
-    path_render(ConfigObject.EnabledModules.__getattr__(i)): {
-        "module": entrance_file(ConfigObject.EnabledModules.__getattr__(i)),
+    path_render(Modules.config[i]["__name__"]): {
+        "module": entrance_file(Modules.config[i]["entry"]),
         "name": i
-    } for i in ConfigObject.EnabledModules
+    } for i in Modules.config.keys()
 }
-
-def ModuleConfig():
-    if sys._getframe(1).f_code.co_filename not in ImportedModules:
-        return None
-    return ConfigObject.ModulesConfig[ImportedModules[sys._getframe(1).f_code.co_filename]["name"]]
-
 GlobalApp = Application(Route.load())
 print(Route.routes)
 import database.connector
 import database.model
 GlobalApp.objects = FormsDict({
     "Database": database.connector.Manager,
-    "ModuleConfig": ModuleConfig
+    "ModuleConfig": Modules
 })
 
 existed_tables = database.connector.SelectedDatabase.get_tables()

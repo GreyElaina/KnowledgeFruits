@@ -13,9 +13,9 @@ FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
 password = entrance_file("../common/password.py")
 importext = entrance_file("@/common/importext/__init__.py")
 Exceptions = entrance_file("../Exceptions.py")
-databox = entrance_file("../common/data.py")
+query = entrance_file("@/database/query.py")
 config = entrance_file("@/config.py").ConfigObject
-DataFormat = databox.Format
+DataFormat = entrance_file("../common/data.py").Format
 json = importext.AlternativeImport("ujson", "json")
 
 tokens = entrance_file("../util.py").tokens
@@ -26,7 +26,7 @@ authlimit = Cache()
 async def ygg_authserver_authenticate(self: RequestHandler):
     data = self.json
     try:
-        user = await manager.get(databox.account_email(data.get("username")))
+        user = await manager.get(query.account_email(data.get("username")))
     except model.User.DoesNotExist:
         raise Exceptions.InvalidCredentials()
 
@@ -37,7 +37,7 @@ async def ygg_authserver_authenticate(self: RequestHandler):
 
     if password.saltcat(data.get("password"), user.salt) == user.password:
         Format = DataFormat(self.request)
-        profiles_query = databox.profiles_userid(user.uuid)
+        profiles_query = query.profiles_userid(user.uuid)
         profiles = await manager.execute(profiles_query)
         # profiles.count() == 1
         unit = tokens.newToken(
@@ -51,12 +51,12 @@ async def ygg_authserver_authenticate(self: RequestHandler):
             "accessToken": unit.accessToken.hex,
             "clientToken": str(unit.clientToken),
             "availableProfiles": [
-                Format.profile(i, {"unsigned": True}) for i in profiles
+                Format.profile(i, {"unsigned": True, "hasProperties": False}) for i in profiles
             ],
             "selectedProfile": {}
         }
         if unit.profile.uuid:
-            result["selectedProfile"] = Format.profile(await manager.get(databox.profile_uuid(unit.profile.uuid)), {"unsigned": True})
+            result["selectedProfile"] = Format.profile(await manager.get(query.profile_uuid(unit.profile.uuid)), {"unsigned": True})
         else:
             del result['selectedProfile']
 
@@ -80,13 +80,13 @@ async def ygg_authserver_refresh(self):
     if not tokens.validate_disabled(data.get("accessToken"), data.get("clientToken")):
         raise Exceptions.InvalidToken()
 
-    user = await manager.get(databox.account_uuid(original.account.uuid))
+    user = await manager.get(query.account_uuid(original.account.uuid))
     selected_profile = None
     if original.profile.uuid:
-        selected_profile = await manager.get(databox.profile_uuid(original.profile.uuid.hex))
+        selected_profile = await manager.get(query.profile_uuid(original.profile.uuid.hex))
     if data.get("selectedProfile"):
         try:
-            attempt_select = await manager.get(databox.profile_name_uuid({
+            attempt_select = await manager.get(query.profile_name_uuid({
                 "uuid": data.get("selectedProfile").get("id"),
                 "name": data.get("selectedProfile").get("name")
             })) # 尝试将角色绑定到Token上
@@ -162,7 +162,7 @@ async def ygg_authserver_invalidate(self):
 async def ygg_authserver_signout(self):
     data = self.json
     try:
-        user = await manager.get(databox.account_email(data.get("username")))
+        user = await manager.get(query.account_email(data.get("username")))
     except model.User.DoesNotExist:
         raise Exceptions.InvalidCredentials()
 
