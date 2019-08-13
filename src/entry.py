@@ -22,7 +22,6 @@ ImportedModules = {
     } for i in Modules.config.keys()
 }
 GlobalApp = Application(Route.load())
-print(Route.routes)
 import database.connector
 import database.model
 GlobalApp.objects = FormsDict({
@@ -31,8 +30,8 @@ GlobalApp.objects = FormsDict({
 })
 
 existed_tables = database.connector.SelectedDatabase.get_tables()
-print("框架中已注册的数据表(已进行处理): " + ", ".join([i.__name__.lower() for i in database.model.BaseModel.__subclasses__()]))
-print("数据库中现有的数据表: " + ", ".join(existed_tables))
+print(f'框架中已注册的数据表(已进行处理): {", ".join([i.__name__.lower() for i in database.model.BaseModel.__subclasses__()])}')
+print(f'数据库中现有的数据表: {", ".join(existed_tables)}')
 
 for i in database.model.BaseModel.__subclasses__():
     if i.__name__.lower() not in existed_tables:
