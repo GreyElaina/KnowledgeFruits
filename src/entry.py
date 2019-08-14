@@ -9,11 +9,12 @@ import peewee_async
 from entrancebar import entrance_file, path_render
 
 from routes import Route
-from config import ConfigObject, ModuleConfig
 import sys
 from common.FormsDict import FormsDict
 
-Modules = ModuleConfig()
+config = entrance_file("@/common/config.py")
+ConfigObject = config.ConfigObject
+Modules = config.ModuleConfig()
 
 ImportedModules = {
     path_render(Modules.config[i]["__name__"]): {

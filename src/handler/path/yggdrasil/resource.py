@@ -5,8 +5,8 @@ import tornado.web
 
 Model = entrance_file("@/database/model.py")
 Manager = entrance_file("@/database/connector.py").Manager
-ImageResponse = entrance_file("@/Respond.py").ImageResponse
-Response = entrance_file("@/Respond.py").Response
+ImageResponse = entrance_file("@/common/Respond.py").ImageResponse
+Response = entrance_file("@/common/Respond.py").Response
 
 @Route.add(r"/resources/(?P<name>.*)")
 async def resource_get(self, name):

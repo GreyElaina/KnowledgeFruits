@@ -1,5 +1,4 @@
 from routes import Route
-from Respond import JSONResponse, Response
 from entrancebar import entrance_file, path_render
 from tornado.web import RequestHandler
 from datetime import datetime, timedelta
@@ -10,15 +9,19 @@ from uuid import UUID
 model = entrance_file("@/database/model.py")
 manager = entrance_file("@/database/connector.py").Manager
 FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
-password = entrance_file("../common/password.py")
+password = entrance_file("@/common/cryptor.py")
 importext = entrance_file("@/common/importext/__init__.py")
 Exceptions = entrance_file("../Exceptions.py")
 query = entrance_file("@/database/query.py")
-config = entrance_file("@/config.py").ConfigObject
+config = entrance_file("@/common/config.py").ConfigObject
 DataFormat = entrance_file("../common/data.py").Format
 json = importext.AlternativeImport("ujson", "json")
 
-tokens = entrance_file("../util.py").tokens
+Respond = entrance_file("@/common/Respond.py")
+JSONResponse = Respond.JSONResponse
+Response = Respond.Response
+
+tokens = entrance_file("@handler/token/main.py").tokens
 
 authlimit = Cache()
 
@@ -85,26 +88,23 @@ async def ygg_authserver_refresh(self):
     if original.profile.uuid:
         selected_profile = await manager.get(query.profile_uuid(original.profile.uuid.hex))
     if data.get("selectedProfile"):
+        if selected_profile: # Token已绑定一已知角色
+            raise Exceptions.IllegalArgumentException()
+
         try:
             attempt_select = await manager.get(query.profile_name_uuid({
                 "uuid": data.get("selectedProfile").get("id"),
                 "name": data.get("selectedProfile").get("name")
             })) # 尝试将角色绑定到Token上
-        except model.Profile.DoesNotExist:
+        except model.Profile.DoesNotExist: # 角色不存在
             raise Exceptions.IllegalArgumentException()
-
-        if selected_profile: # Token已绑定一已知角色
-            raise Exceptions.IllegalArgumentException()
-
+        
         if attempt_select.owner != user.uuid: # 该已知角色不属于该用户
             raise Exceptions.WrongBind()
-        selected_profile = attempt_select
+        selected_profile = attempt_select # 确认绑定
 
     tokens.delete(data.get("accessToken"))
-    if selected_profile:
-        isOriginal = selected_profile.uuid == original.profile.uuid
-    else:
-        isOriginal = False
+
     unit = tokens.newToken(
         datetime.now(),
         datetime.now() + timedelta(**config.TokenManage.Refreshline),

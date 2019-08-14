@@ -1,13 +1,14 @@
-from Respond import BaseResponse, JSONResponse
-
 from tornado.web import RequestHandler
 from entrancebar import entrance_file
 from blinker import signal
 import traceback
-ConfigObject = entrance_file("@/config.py").ConfigObject
+ConfigObject = entrance_file("@/common/config.py").ConfigObject
 AlternativeImport = entrance_file("@/common/importext/__init__.py").AlternativeImport
 
 FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
+
+Respond = entrance_file("@/common/Respond.py")
+JSONResponse = Respond.JSONResponse
 
 json = AlternativeImport("ujson", "json")
 
@@ -38,7 +39,7 @@ class Routes:
     def add(self, Route, Method: str = "get", force=False, restful=False):
         def warpper(Handler):
             method = Method.lower()
-            assert method in set(["get", "post", "head", "delete", "patch", "put", "options"])
+            assert method in {"get", "post", "head", "delete", "patch", "put", "options"}
 
             async def HandlerMixin(self, **kwargs):
                 if restful and method == "post":

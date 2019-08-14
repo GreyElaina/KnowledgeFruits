@@ -1,5 +1,4 @@
 from routes import Route
-from Respond import JSONResponse, Response
 from entrancebar import entrance_file, path_render
 from urllib.parse import parse_qs, urlencode, urlparse
 from functools import reduce
@@ -12,10 +11,14 @@ importext = entrance_file("@/common/importext/__init__.py")
 FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
 Exceptions = entrance_file("../Exceptions.py")
 query = entrance_file("@/database/query.py")
-config = entrance_file("@/config.py").ConfigObject
+config = entrance_file("@/common/config.py").ConfigObject
 DataFormat = entrance_file("../common/data.py").Format
 Resource = entrance_file("../resource.py")
 json = importext.AlternativeImport("ujson", "json")
+
+Respond = entrance_file("@/common/Respond.py")
+JSONResponse = Respond.JSONResponse
+Response = Respond.Response
 
 @Route.add("/api/yggdrasil/")
 async def ygg_index(self):

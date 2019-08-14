@@ -2,8 +2,8 @@ import os
 import sys
 from entrancebar import entrance_file
 
-config = entrance_file("../config.py")
-FormsDict = entrance_file("../common/FormsDict.py").FormsDict
+config = entrance_file("@/common/config.py")
+FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
 import peewee
 import peewee_async
 

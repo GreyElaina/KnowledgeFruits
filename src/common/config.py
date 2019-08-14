@@ -1,11 +1,10 @@
-__import__('sys').path.append(__import__("os").path.dirname(__import__("os").path.realpath(__file__)) + "/..")
-# Config Parser
-import etc as Config
+from entrancebar import path_render, add_path, entrance_file
+Config = entrance_file("${projectDir}/etc/__init__.py")
 ConfigObject = Config.GetConfigObject()
 ConfigDict = Config.GetConfigDict()
 
 from mako.template import Template
-from entrancebar import path_render, add_path
+
 import sys
 import os.path
 
@@ -36,7 +35,7 @@ class ModuleConfig:
 
     def get(self):
         for i in self.config.keys():
-            #print(i, self.config[i], os.path.dirname(os.path.abspath(sys._getframe(1).f_code.co_filename)))
+            # print(i, self.config[i], os.path.dirname(os.path.abspath(sys._getframe(1).f_code.co_filename)))
             if self.config[i]['dir']['enable']:
                 if self.config[i]['dir']['value'].replace("\\", "/") in os.path.dirname(os.path.abspath(sys._getframe(1).f_code.co_filename)).replace("\\", "/"):
                     return ConfigDict['ModulesConfig'].get(i)

@@ -7,7 +7,7 @@ import rsa
 model = entrance_file("@/database/model.py")
 manager = entrance_file("@/database/connector.py").Manager
 FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
-Config = entrance_file("@/config.py").ConfigObject
+Config = entrance_file("@/common/config.py").ConfigObject
 importext = entrance_file("@/common/importext/__init__.py")
 
 json = importext.AlternativeImport("ujson", "json")

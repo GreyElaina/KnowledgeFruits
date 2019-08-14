@@ -26,6 +26,12 @@ class User(BaseModel):
     password = CharField()
     salt = CharField()
     permission = CharField(default="CommonUser")
+    # 权限分这么几个:
+    # 1.CommonUser -- 就是一般通过的普通用户
+    # 2.Manager -- 具有对用户进行受限操作, 对部分敏感数据(日志)进行调取的权限, 也就是op
+    # 3.Owner -- 一个实例中只有一个, 也就是服主/站长/The Administrator/Cat, 
+    #            具有对所有数据(仅可修改, 且不影响实例整体的数据)进行
+    #            调取/修改/新增/删除的权限(但是没办法触碰到基本设施的配置)
     registerTime = TimestampField(utc=True)
 
 class Profile(BaseModel):

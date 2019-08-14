@@ -1,5 +1,4 @@
 from routes import Route
-from Respond import JSONResponse, Response
 from entrancebar import entrance_file, path_render
 from tornado.web import RequestHandler
 
@@ -11,12 +10,16 @@ manager = entrance_file("@/database/connector.py").Manager
 importext = entrance_file("@/common/importext/__init__.py")
 Exceptions = entrance_file("../Exceptions.py")
 query = entrance_file("@/database/query.py")
-config = entrance_file("@/config.py").ConfigObject
+config = entrance_file("@/common/config.py").ConfigObject
 DataFormat = entrance_file("../common/data.py").Format
 Resource = entrance_file("../resource.py")
 json = importext.AlternativeImport("ujson", "json")
 
-tokens = entrance_file("../util.py").tokens
+Respond = entrance_file("@/common/Respond.py")
+JSONResponse = Respond.JSONResponse
+Response = Respond.Response
+
+tokens = entrance_file("@handler/token/main.py").tokens
 
 ServerJoin = Cache()
 
@@ -58,7 +61,7 @@ async def ygg_sessionserver_checkjoin(self: RequestHandler):
         playerName == cachedData['profile'].name,
         remoteIp == cachedData['remoteIp'] if remoteIp else True
     ]):
-        Format = DataFormat(self.request) 
+        Format = DataFormat(self.request)
         return JSONResponse(Format.profile(cachedData['profile'], {
             "hasProperties": False,
             "enableSmartDecide": True,
