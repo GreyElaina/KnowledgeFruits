@@ -1,3 +1,3 @@
 from entrancebar import entrance_file
 
-entrance_file("./authenticate/")
+entrance_file("./authenticate/signin.py")

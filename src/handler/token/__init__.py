@@ -12,8 +12,11 @@ class Context(object):
             setattr(self, i, kwargs[i])
 
 class Token(Cache):
-    def newToken(self, start: datetime.datetime, refrush: datetime.datetime, end: datetime.datetime, user: uuid.UUID, clientToken=None, group=None, profile: uuid.UUID = None):
-        self.TokenIndex = Cache()
+    def newToken(
+        self,
+        start: datetime.datetime, refrush: datetime.datetime, end: datetime.datetime, 
+        user: uuid.UUID, clientToken=None, group=None, profile: uuid.UUID = None
+    ):
         accessToken = uuid.uuid4()
         if not clientToken:
             clientToken = uuid.uuid1()
@@ -35,15 +38,14 @@ class Token(Cache):
             )
         )
         self.set(accessToken.hex, Unit, ttl=(end - start).seconds)
-        self.TokenIndex.set(str(clientToken), accessToken.hex, ttl=(end - start).seconds)
         return Unit
 
     def get(self, accessToken, clientToken=None):
-        if clientToken:
-            clientToken_Index = self.TokenIndex.get(clientToken)
-            if clientToken_Index != accessToken:
+        result = super().get(accessToken)
+        if clientToken and result:
+            if result.clientToken != clientToken:
                 return
-        return super().get(accessToken)
+        return result
 
     def getManyToken(self, userId):
         results = []
@@ -69,3 +71,5 @@ class Token(Cache):
         if not result:
             return False
         return datetime.datetime.now() <= result.established.deadline
+
+tokens = Token()

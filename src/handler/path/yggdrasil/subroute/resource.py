@@ -1,8 +1,8 @@
-from entrancebar import entrance_file, path_render
+from entrancebar import entrance_file, path_render, entrance_package
 import os.path
-from routes import Route
 import tornado.web
 
+Route = entrance_package("router").Route
 Model = entrance_file("@/database/model.py")
 Manager = entrance_file("@/database/connector.py").Manager
 ImageResponse = entrance_file("@/common/Respond.py").ImageResponse

@@ -1,11 +1,11 @@
-from routes import Route
-from entrancebar import entrance_file, path_render
+from entrancebar import entrance_file, path_render, entrance_package
 from tornado.web import RequestHandler
 from datetime import datetime, timedelta
 
 from cacheout import Cache
 from uuid import UUID
 
+Route = entrance_package("router").Route
 model = entrance_file("@/database/model.py")
 manager = entrance_file("@/database/connector.py").Manager
 FormsDict = entrance_file("@/common/FormsDict.py").FormsDict
@@ -21,7 +21,7 @@ Respond = entrance_file("@/common/Respond.py")
 JSONResponse = Respond.JSONResponse
 Response = Respond.Response
 
-tokens = entrance_file("@handler/token/main.py").tokens
+tokens = entrance_package("token").tokens
 
 authlimit = Cache()
 

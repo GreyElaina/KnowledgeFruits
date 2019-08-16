@@ -23,6 +23,7 @@ class JSONResponse(BaseResponse):
     def render(self, request):
         request.set_status = self.status
         request.set_header("Content-type", "application/json; charset=UTF-8")
+        print(self.body)
         request.write(json.dumps(self.body))
 
 class ImageResponse(BaseResponse):

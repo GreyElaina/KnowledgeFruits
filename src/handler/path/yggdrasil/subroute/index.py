@@ -1,10 +1,10 @@
-from routes import Route
-from entrancebar import entrance_file, path_render
+from entrancebar import entrance_file, path_render, entrance_package
 from urllib.parse import parse_qs, urlencode, urlparse
 from functools import reduce
 
 from uuid import UUID
 
+Route = entrance_package("router").Route
 model = entrance_file("@/database/model.py")
 manager = entrance_file("@/database/connector.py").Manager
 importext = entrance_file("@/common/importext/__init__.py")
@@ -13,7 +13,6 @@ Exceptions = entrance_file("../Exceptions.py")
 query = entrance_file("@/database/query.py")
 config = entrance_file("@/common/config.py").ConfigObject
 DataFormat = entrance_file("../common/data.py").Format
-Resource = entrance_file("../resource.py")
 json = importext.AlternativeImport("ujson", "json")
 
 Respond = entrance_file("@/common/Respond.py")

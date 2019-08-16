@@ -1,17 +1,21 @@
 import asyncio
-import os
 import logging
+import os
+import sys
 
-from tornado.web import Application
+import peewee_async
 import tornado.ioloop
 import tornado.log
-import peewee_async
-from entrancebar import entrance_file, path_render
+from tornado.web import Application
+import ssl
+from tornado.web import HTTPServer
 
-from routes import Route
-import sys
+import database.connector
+import database.model
 from common.FormsDict import FormsDict
+from entrancebar import entrance_file, entrance_package, path_render
 
+Route = entrance_package("router").Route
 config = entrance_file("@/common/config.py")
 ConfigObject = config.ConfigObject
 Modules = config.ModuleConfig()
@@ -23,8 +27,6 @@ ImportedModules = {
     } for i in Modules.config.keys()
 }
 GlobalApp = Application(Route.load())
-import database.connector
-import database.model
 GlobalApp.objects = FormsDict({
     "Database": database.connector.Manager,
     "ModuleConfig": Modules

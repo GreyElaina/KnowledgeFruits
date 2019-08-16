@@ -14,7 +14,7 @@ peewee-async = "*"
 cacheout = "*"
 aiopg = "*"
 tornado = "*"
-entrancebar = "==0.0.15"
+entrancebar = "==0.0.21"
 blinker = "*"
 mako = "*"
 

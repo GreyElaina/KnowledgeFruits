@@ -1,5 +1,5 @@
-from entrancebar import path_render, add_path, entrance_file
-Config = entrance_file("${projectDir}/etc/__init__.py")
+from entrancebar import path_render, entrance_file
+Config = entrance_file("{projectDir}/etc/__init__.py")
 ConfigObject = Config.GetConfigObject()
 ConfigDict = Config.GetConfigDict()
 

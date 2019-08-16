@@ -1,7 +1,19 @@
 {
     "alias": {
-        "@handler": "${projectDir}/src/handler",
-        "@path": "${projectDir}/src/handler/path",
-        "@": "${projectDir}/src"
+        "@handler": "{projectDir}/src/handler",
+        "@path": "{projectDir}/src/handler/path",
+        "@": "{projectDir}/src"
+    },
+    "global": {
+        "packages": {
+            "router": "@/routes",
+            "query": "@/database/query.py",
+            "token": "@handler/token",
+            "entry": "@/entry.py",
+            "responses": "@/common/Respond.py",
+            "model": "@/database/model.py",
+            "cryptor": "@/common/cryptor.py",
+            "config": "@/common/config.py"
+        }
     }
 }

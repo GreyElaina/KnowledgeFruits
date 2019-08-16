@@ -46,7 +46,6 @@ class Format:
             result["metadata"] = {
                 "model": {"STEVE": 'default', "ALEX": 'slim'}[row.model]
             }
-        print(result)
         return result
 
     def profile(self, row: model.Profile, options: dict = {}):

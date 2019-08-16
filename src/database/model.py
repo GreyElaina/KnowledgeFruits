@@ -55,3 +55,5 @@ class Resource(BaseModel):
     privated = BooleanField(default=False)
     owner = UUIDField()
 
+def NotFound(model):
+    return model.DoesNotExist
