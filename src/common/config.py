@@ -36,6 +36,11 @@ class ModuleConfig:
     def get(self):
         for i in self.config.keys():
             # print(i, self.config[i], os.path.dirname(os.path.abspath(sys._getframe(1).f_code.co_filename)))
-            if self.config[i]['dir']['enable']:
-                if self.config[i]['dir']['value'].replace("\\", "/") in os.path.dirname(os.path.abspath(sys._getframe(1).f_code.co_filename)).replace("\\", "/"):
-                    return ConfigDict['ModulesConfig'].get(i)
+            if self.config[i]['dir']['enable'] and self.config[i]['dir'][
+                'value'
+            ].replace("\\", "/") in os.path.dirname(
+                os.path.abspath(sys._getframe(1).f_code.co_filename)
+            ).replace(
+                "\\", "/"
+            ):
+                return ConfigDict['ModulesConfig'].get(i)

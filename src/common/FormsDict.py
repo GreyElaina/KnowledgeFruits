@@ -34,7 +34,7 @@ class MultiDict(DictMixin):
     """
 
     def __init__(self, *a, **k):
-        self.dict = dict((k, [v]) for (k, v) in dict(*a, **k).items())
+        self.dict = {k: [v] for (k, v) in dict(*a, **k).items()}
 
     def __len__(self): return len(self.dict)
     def __iter__(self): return iter(self.dict)

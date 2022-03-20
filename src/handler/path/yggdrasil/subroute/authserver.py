@@ -38,39 +38,38 @@ async def ygg_authserver_authenticate(self: RequestHandler):
     else:
         raise Exceptions.InvalidCredentials()
 
-    if password.saltcat(data.get("password"), user.salt) == user.password:
-        Format = DataFormat(self.request)
-        profiles_query = query.profiles_userid(user.uuid)
-        profiles = await manager.execute(profiles_query)
-        # profiles.count() == 1
-        unit = tokens.newToken(
-            datetime.now(),
-            datetime.now() + timedelta(**config.TokenManage.Refreshline),
-            datetime.now() + timedelta(**config.TokenManage.Deadline),
-            user=user.uuid, clientToken=data.get("clientToken"),
-            profile=(await manager.get(profiles_query)).uuid if await manager.count(profiles_query) == 1 else None
-        )
-        result = {
-            "accessToken": unit.accessToken.hex,
-            "clientToken": str(unit.clientToken),
-            "availableProfiles": [
-                Format.profile(i, {"unsigned": True, "hasProperties": False}) for i in profiles
-            ],
-            "selectedProfile": {}
-        }
-        if unit.profile.uuid:
-            result["selectedProfile"] = Format.profile(await manager.get(query.profile_uuid(unit.profile.uuid)), {"unsigned": True})
-        else:
-            del result['selectedProfile']
-
-        if data.get("requestUser"):
-            result["user"] = {
-                "id": user.uuid.hex,
-                "properties" : []
-            }
-        return JSONResponse(result)
-    else:
+    if password.saltcat(data.get("password"), user.salt) != user.password:
         raise Exceptions.InvalidCredentials()
+    Format = DataFormat(self.request)
+    profiles_query = query.profiles_userid(user.uuid)
+    profiles = await manager.execute(profiles_query)
+    # profiles.count() == 1
+    unit = tokens.newToken(
+        datetime.now(),
+        datetime.now() + timedelta(**config.TokenManage.Refreshline),
+        datetime.now() + timedelta(**config.TokenManage.Deadline),
+        user=user.uuid, clientToken=data.get("clientToken"),
+        profile=(await manager.get(profiles_query)).uuid if await manager.count(profiles_query) == 1 else None
+    )
+    result = {
+        "accessToken": unit.accessToken.hex,
+        "clientToken": str(unit.clientToken),
+        "availableProfiles": [
+            Format.profile(i, {"unsigned": True, "hasProperties": False}) for i in profiles
+        ],
+        "selectedProfile": {}
+    }
+    if unit.profile.uuid:
+        result["selectedProfile"] = Format.profile(await manager.get(query.profile_uuid(unit.profile.uuid)), {"unsigned": True})
+    else:
+        del result['selectedProfile']
+
+    if data.get("requestUser"):
+        result["user"] = {
+            "id": user.uuid.hex,
+            "properties" : []
+        }
+    return JSONResponse(result)
 
 @Route.add("/api/yggdrasil/authserver/refresh", Method="post", restful=True)
 async def ygg_authserver_refresh(self):
@@ -147,15 +146,14 @@ async def ygg_authserver_invalidate(self):
     original = tokens.get(data.get("accessToken"), data.get("clientToken"))
     if original:
         tokens.delete(data.get("accessToken"))
-    else:
-        if data.get("clientToken"):
-            original = tokens.get(data.get("accessToken"))
-            if not original:
-                raise Exceptions.InvalidToken()
-            else:
-                tokens.delete(data.get("accessToken"))
+    elif data.get("clientToken"):
+        original = tokens.get(data.get("accessToken"))
+        if original:
+            tokens.delete(data.get("accessToken"))
         else:
-            return Response(status=204)
+            raise Exceptions.InvalidToken()
+    else:
+        return Response(status=204)
     return Response(status=204)
 
 @Route.add("/api/yggdrasil/authserver/signout", Method="post", restful=True)
@@ -171,10 +169,9 @@ async def ygg_authserver_signout(self):
     else:
         raise Exceptions.InvalidCredentials()
 
-    if password.saltcat(data.get("password"), user.salt) == user.password:
-        for i in tokens.getManyToken(user.uuid.hex):
-            tokens.delete(i.accessToken.hex)
-            tokens.TokenIndex.delete(i.clientToken.hex)
-        return Response(status=204)
-    else:
+    if password.saltcat(data.get("password"), user.salt) != user.password:
         raise Exceptions.InvalidCredentials()
+    for i in tokens.getManyToken(user.uuid.hex):
+        tokens.delete(i.accessToken.hex)
+        tokens.TokenIndex.delete(i.clientToken.hex)
+    return Response(status=204)

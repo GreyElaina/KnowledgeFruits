@@ -42,12 +42,11 @@ class Routes:
             assert method in {"get", "post", "head", "delete", "patch", "put", "options"}
 
             async def HandlerMixin(self, **kwargs):
-                if restful and method == "post":
-                    if not self.is_json:
-                        JSONResponse({
-                            "error": "ForbiddenOperationException",
-                            "errorMessage": "The submitted data is not in the correct format."
-                        }, status=403).render(self)
+                if restful and method == "post" and not self.is_json:
+                    JSONResponse({
+                        "error": "ForbiddenOperationException",
+                        "errorMessage": "The submitted data is not in the correct format."
+                    }, status=403).render(self)
                 try:
                     ReturnResponse = await Handler(self, **kwargs)
                 except Exception as e:

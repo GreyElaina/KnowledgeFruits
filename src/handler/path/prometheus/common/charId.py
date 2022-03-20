@@ -1,10 +1,7 @@
 import hashlib
 
 def hex2bin(hexstring):
-    al = []
-    for i in range(0, len(hexstring), 2):
-        b = hexstring[i:i+2]
-        al.append(chr(int(b, 16)))
+    al = [chr(int(hexstring[i:i+2], 16)) for i in range(0, len(hexstring), 2)]
     return ''.join(al)
 
 def bin2hex(sendbin):
@@ -17,7 +14,9 @@ def md5(string):
     return hashlib.md5(string.encode(encoding='utf-8')).hexdigest()
 
 def substr(string, start, length=None):
-    return string[start if start >= 0 else 0:][:(length if length is not None else (len(string) - start))]
+    return string[max(start, 0) :][
+        : (length if length is not None else (len(string) - start))
+    ]
 
 def OfflinePlayerUUID(name):
     data = list(hex2bin(md5("OfflinePlayer:" + name)))

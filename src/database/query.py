@@ -41,9 +41,9 @@ def account_many(options):
         "email": None,
         "userid": None
     }
-    for i in original.keys():
+    for i in original:
         original[i] = options.get(i)
-    
+
     original = {k: v for k, v in original.items() if v}
 
     if not original:

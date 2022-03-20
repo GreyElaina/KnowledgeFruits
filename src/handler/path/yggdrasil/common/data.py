@@ -72,8 +72,8 @@ class Format:
                     }).encode("utf-8")).decode("utf-8")
                 }
             ]
-            if not self.options.unsigned:
-                for i in range(len(result['properties'])):
-                    result['properties'][i]['signature'] = self._sign_text(result['properties'][i]['value'])
+        if not self.options.unsigned:
+            for i in range(len(result['properties'])):
+                result['properties'][i]['signature'] = self._sign_text(result['properties'][i]['value'])
 
         return result

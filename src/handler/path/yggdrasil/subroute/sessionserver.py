@@ -25,26 +25,25 @@ ServerJoin = Cache()
 @Route.add("/api/yggdrasil/sessionserver/session/minecraft/join", Method="post", restful=True)
 async def ygg_sessionserver_join(self):
     data = self.json
-    if tokens.validate(data.get("accessToken")):
-        token = tokens.get(data.get("accessToken"))
-        if not token:
-            raise Exceptions.InvalidToken()
-        if not token.profile.uuid:
-            raise Exceptions.InvalidToken()
-        try:
-            result = await manager.get(query.profile_uuid(token.profile.uuid))
-        except model.Profile.DoesNotExist:
-            raise Exceptions.InvalidToken()
-        player = await manager.get(query.profile_name(result.name))
-        if data.get("selectedProfile") == player.uuid.hex:
-            ServerJoin.set(data.get("serverId"), {
-                "token": token,
-                "profile": player,
-                "remoteIp": self.request.remote_ip
-            }, ttl=30)
-            return Response(status=204)
-        else:
-            raise Exceptions.InvalidToken()
+    if not tokens.validate(data.get("accessToken")):
+        raise Exceptions.InvalidToken()
+    token = tokens.get(data.get("accessToken"))
+    if not token:
+        raise Exceptions.InvalidToken()
+    if not token.profile.uuid:
+        raise Exceptions.InvalidToken()
+    try:
+        result = await manager.get(query.profile_uuid(token.profile.uuid))
+    except model.Profile.DoesNotExist:
+        raise Exceptions.InvalidToken()
+    player = await manager.get(query.profile_name(result.name))
+    if data.get("selectedProfile") == player.uuid.hex:
+        ServerJoin.set(data.get("serverId"), {
+            "token": token,
+            "profile": player,
+            "remoteIp": self.request.remote_ip
+        }, ttl=30)
+        return Response(status=204)
     else:
         raise Exceptions.InvalidToken()
 

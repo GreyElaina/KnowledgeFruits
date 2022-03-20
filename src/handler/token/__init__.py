@@ -42,17 +42,12 @@ class Token(Cache):
 
     def get(self, accessToken, clientToken=None):
         result = super().get(accessToken)
-        if clientToken and result:
-            if result.clientToken != clientToken:
-                return
+        if clientToken and result and result.clientToken != clientToken:
+            return
         return result
 
     def getManyToken(self, userId):
-        results = []
-        for i in self.values():
-            if i.account.uuid.hex == userId:
-                results.append(i)
-        return results
+        return [i for i in self.values() if i.account.uuid.hex == userId]
 
     def validate(self, accessToken, clientToken=None):
         """

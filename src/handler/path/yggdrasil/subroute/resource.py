@@ -11,7 +11,8 @@ Response = entrance_file("@/common/Respond.py").Response
 @Route.add(r"/resources/(?P<name>.*)")
 async def resource_get(self, name):
     path = path_render("${projectDir}/data/resources/{name}.png").format(name=name)
-    if not os.path.exists(path):
-        return Response(status=404)
-    else:
-        return ImageResponse(open(path, "rb").read())
+    return (
+        ImageResponse(open(path, "rb").read())
+        if os.path.exists(path)
+        else Response(status=404)
+    )
